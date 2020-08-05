@@ -120,15 +120,27 @@ Function Parse-Files {
         [Parameter()] [switch] $CTStraffic
     )
 
-    if ($NTTTCP) {
-        [Array] $dataEntries = @() 
-        Get-ChildItem $DirName | 
-        Foreach-Object {
-            $fileName = $_.FullName
-            $dataEntry = Parse-NTTTCP -FileName $fileName
-            $dataEntries += ,$dataEntry
-       }
+    try {
+        $ErrorActionPreference = "Stop"
+        $files = Get-ChildItem $DirName
+    } catch {
+        Write-Warning "Failed to open directory at path: $DirName"
+        Write-Error $_.Exception.Message
+    }
 
+    if ($NTTTCP) {
+        [Array] $dataEntries = @()
+        ForEach ($file in $files) {
+            $fileName = $file.FullName
+            try {
+                $ErrorActionPreference = "Stop"
+                $dataEntry = Parse-NTTTCP -FileName $fileName
+            } catch {
+                Write-Warning "NTTTCP Parser failed to parse file $fileName"
+                Write-Error $_.Exception.Message
+            }
+            $dataEntries += ,$dataEntry
+        }
         $rawData = @{
             "meta" = @{
                 "units" = @{
@@ -153,10 +165,15 @@ Function Parse-Files {
 
     } elseif ($LATTE) {
         [Array] $dataEntries = @() 
-        Get-ChildItem $DirName | 
-        Foreach-Object {
-            $fileName = $_.FullName
-            $dataEntry = Parse-LATTE -FileName $fileName
+        ForEach ($file in $files) {
+            $fileName = $file.FullName
+            try {
+                $ErrorActionPreference = "Stop"
+                $dataEntry = Parse-LATTE -FileName $fileName
+            } catch {
+                Write-Warning "LATTE Parser failed to parse file $fileName"
+                Write-Error $_.Exception.Message
+            }
             $dataEntries += ,$dataEntry
         }
 
@@ -179,10 +196,15 @@ Function Parse-Files {
         return $rawData
     } elseif ($CTStraffic) {
         [Array] $dataEntries = @() 
-        Get-ChildItem $DirName | 
-        Foreach-Object {
-            $fileName = $_.FullName
-            $dataEntry = Parse-CTStraffic -FileName $fileName
+        ForEach ($file in $files) {
+            $fileName = $file.FullName
+            try {
+                $ErrorActionPreference = "Stop"
+                $dataEntry = Parse-CTStraffic -FileName $fileName
+            } catch {
+                Write-Warning "NTTTCP Parser failed to parse file $fileName"
+                Write-Error $_.Exception.Message
+            }
             $dataEntries += ,$dataEntry
         }
         $rawData = @{
@@ -271,6 +293,8 @@ Function Parse-LATTE ([string] $FileName) {
 
 # Data Processing --------------------------------------------------------------------
 
+# This function processes raw data objects, organizing data by property and sortProp value and 
+# calculating statistics over organized data.
 Function Process-Data {
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $BaselineDataObj,
@@ -288,80 +312,80 @@ Function Process-Data {
         $processedDataObj.meta.comparison = $true
         $processedDataObj.rawData.test = $TestDataObj.data
     }
-    $props = @()
+
     $sortProp = $BaselineDataObj.meta.sortProp
     ForEach ($prop in ([Array]$BaselineDataObj.data)[0].Keys) {
-        if (($prop -ne $BaselineDataObj.meta.sortProp) -And (-Not ($BaselineDataObj.meta.noTable -Contains $prop))) {
-            $props += $prop
-            $processedDataObj.data.$prop = @{}
-            
-            $modes = @("baseline")
-            ForEach($item in $BaselineDataObj.data) {
+        if (($prop -eq $BaselineDataObj.meta.sortProp) -or ($BaselineDataObj.meta.noTable -Contains $prop)) {
+            continue
+        }
+
+        # Organize baseline data by sortProp values
+        $processedDataObj.data.$prop = @{}
+        $modes = @("baseline")
+        ForEach($item in $BaselineDataObj.data) {
+            $sortKey = "allData"
+            if ($sortProp) {
+                $sortKey = $item.$sortProp 
+            } 
+            if (-Not ($processedDataObj.data.$prop.Keys -Contains $sortKey)) {
+                $processedDataObj.data.$prop.$sortKey = @{
+                    "baseline" = @{
+                        "orderedData" = @()
+                    }
+                }
+            }
+            $processedDataObj.data.$prop.$sortKey.baseline.orderedData += $item.$prop
+        }
+
+        # Organize test data by sortProp values, if test data is provided
+        if ($TestDataObj) {
+            $modes += "test"
+            ForEach ($item in $TestDataObj.data) {
                 $sortKey = "allData"
                 if ($sortProp) {
                     $sortKey = $item.$sortProp 
-                } 
-                if (-Not ($processedDataObj.data.$prop.Keys -Contains $sortKey)) {
-                    $processedDataObj.data.$prop.$sortKey = @{
-                        "baseline" = @{
-                            "orderedData" = @()
-                        }
-                    }
                 }
-                $processedDataObj.data.$prop.$sortKey.baseline.orderedData += $item.$prop
-            }
-
-            if ($TestDataObj) {
-                $modes += "test"
-                ForEach ($item in $TestDataObj.data) {
-                    $sortKey = "allData"
-                    if ($sortProp) {
-                        $sortKey = $item.$sortProp 
+                if (-Not ($processedDataObj.data.$prop.$sortKey.Keys -Contains "test")) {
+                    $processedDataObj.data.$prop.$sortKey.test = @{
+                        "orderedData" = @()
                     }
-                    if (-Not ($processedDataObj.data.$prop.$sortKey.Keys -Contains "test")) {
-                        $processedDataObj.data.$prop.$sortKey["test"] = @{
-                            "orderedData" = @()
-                        }
-                        $processedDataObj.data.$prop.$sortKey["% change"] = @{}
-                    }
-                    $processedDataObj.data.$prop.$sortKey.test.orderedData += $item.$prop
+                    $processedDataObj.data.$prop.$sortKey."% change" = @{}
                 }
+                $processedDataObj.data.$prop.$sortKey.test.orderedData += $item.$prop
             }
+        }
 
-            ForEach ($sortKey in $processedDataObj.data.$prop.Keys) {
-                $percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
+        # Calculate stats and percentiles for each sortKey, calculate % change if necessary
+        ForEach ($sortKey in $processedDataObj.data.$prop.Keys) {
+            $percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
                                      99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
-                ForEach ($mode in $modes) {
-                    $processedDataObj.data.$prop.$sortKey.$mode.orderedData = $processedDataObj.data.$prop.$sortKey.$mode.orderedData | Sort
-                    $stats = Calculate-Stats -arr $processedDataObj.data.$prop.$sortKey.$mode.orderedData
-                    $processedDataObj.data.$prop.$sortKey.$mode.stats = $stats
-                    $processedDataObj.data.$prop.$sortKey.$mode.percentiles = @{}
-                    ForEach ($percentile in $percentiles) {
-                        $idx = [int] (($percentile / 100) * ($processedDataObj.data.$prop.$sortKey.$mode.orderedData.Count - 1))
-                        $value = $processedDataObj.data.$prop.$sortKey.$mode.orderedData[$idx]
-                        $processedDataObj.data.$prop.$sortKey.$mode.percentiles.$percentile = $value
-                    }
-                } 
-                if ($TestDataObj) {
-                    $processedDataObj.data.$prop.$sortKey."% change".stats = @{}
-                    ForEach ($metric in $processedDataObj.data.$prop.$sortKey.$mode.stats.Keys) {
-                        $diff = $processedDataObj.data.$prop.$sortKey."test".stats.$metric - $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric
-                        $percentChange = 100 * ($diff / [math]::Abs( $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric))
-                        $processedDataObj.data.$prop.$sortKey."% change".stats.$metric = $percentChange
-                    }
-                    $processedDataObj.data.$prop.$sortKey."% change".percentiles = @{}
-                    ForEach ($percentile in $percentiles) {
-                        $percentChange = 100 * (($processedDataObj.data.$prop.$sortKey."test".percentiles.$percentile / $processedDataObj.data.$prop.$sortKey."baseline".percentiles.$percentile) - 1)
-                        $processedDataObj.data.$prop.$sortKey."% change".percentiles.$percentile = $percentChange
-                    }
-                } 
-            }  
+            ForEach ($mode in $modes) {
+                $processedDataObj.data.$prop.$sortKey.$mode.orderedData = $processedDataObj.data.$prop.$sortKey.$mode.orderedData | Sort
+                $stats = Calculate-Stats -arr $processedDataObj.data.$prop.$sortKey.$mode.orderedData
+                $processedDataObj.data.$prop.$sortKey.$mode.stats = $stats
+                $processedDataObj.data.$prop.$sortKey.$mode.percentiles = @{}
+                ForEach ($percentile in $percentiles) {
+                    $idx = [int] (($percentile / 100) * ($processedDataObj.data.$prop.$sortKey.$mode.orderedData.Count - 1))
+                    $value = $processedDataObj.data.$prop.$sortKey.$mode.orderedData[$idx]
+                    $processedDataObj.data.$prop.$sortKey.$mode.percentiles.$percentile = $value
+                }
+            } 
+            if ($TestDataObj) {
+                $processedDataObj.data.$prop.$sortKey."% change".stats = @{}
+                ForEach ($metric in $processedDataObj.data.$prop.$sortKey.$mode.stats.Keys) {
+                    $diff = $processedDataObj.data.$prop.$sortKey."test".stats.$metric - $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric
+                    $percentChange = 100 * ($diff / [math]::Abs( $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric))
+                    $processedDataObj.data.$prop.$sortKey."% change".stats.$metric = $percentChange
+                }
+                $processedDataObj.data.$prop.$sortKey."% change".percentiles = @{}
+                ForEach ($percentile in $percentiles) {
+                    $percentChange = 100 * (($processedDataObj.data.$prop.$sortKey."test".percentiles.$percentile / $processedDataObj.data.$prop.$sortKey."baseline".percentiles.$percentile) - 1)
+                    $processedDataObj.data.$prop.$sortKey."% change".percentiles.$percentile = $percentChange
+                }
+            } 
         }
     }
-    $processedDataObj.meta.props = $props
-
     return $processedDataObj
-
 }
  
 # Table Formatting -------------------------------------------------------------------
@@ -373,6 +397,8 @@ $RED = 2108032
 $BLUES = @(10249511, 14058822, 16758932)
 $ORANGES = @(294092, 1681916, 6014716)
 
+# This function formats raw data into tables, one for each dataEntry property. Data samples are
+# organized by their sortProp and labeled with the name of the file from which the data sample was extracted.
 Function Format-RawData {
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
@@ -382,8 +408,7 @@ Function Format-RawData {
 
     $tables = @() 
     $meta = $DataObj.meta
-    $sortProp = $meta.sortProp
-    
+    $sortProp = $meta.sortProp 
     $legend = @{
         "meta" = @{
             "colLabelDepth" = 1
@@ -452,8 +477,7 @@ Function Format-RawData {
         }
     }
 
-    $data = Sort-ByKey -Data $data -Key $sortProp
-
+    $data = Sort-ByProp -Data $data -Prop $sortProp
     ForEach ($prop in $dataObj.data.Keys) {
         $table = @{
             "rows" = @{
@@ -473,6 +497,8 @@ Function Format-RawData {
         $row = 0
         ForEach ($entry in $data){
             $sortKey = $entry.$sortProp
+
+            # Add column labels to table
             if (-Not ($table.cols.$TableTitle.Keys -contains $sortKey)) {
                 if ($meta.comparison) {
                     $table.cols.$TableTitle.$sortKey = @{
@@ -499,6 +525,8 @@ Function Format-RawData {
                     }
                 }
             }
+
+            # Add row labels and fill data in table
             $filename = $entry.fileName
             $table.rows.$prop.$filename = $row
             $row += 1
@@ -540,8 +568,8 @@ Function Format-RawData {
     return $tables
 }
 
-# This function formats min, mean, max, and std dev into a table, displaying % change 
-# and color-coded for improvement/regression when run in comparison mode
+# This function formats stats metrics (mine, mean, max, etc) into a table. When run in comparison 
+# mode, the table also displays % change and is color-coded to indicate improvement/regression.
 Function Format-AnalyzedData {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $dataObj,
@@ -573,7 +601,7 @@ Function Format-AnalyzedData {
         $row = 0
         ForEach ($sortKey in $data.$prop.Keys | Sort) { 
 
-            # Construct column structure
+            # Add column labels to table
             if (-Not $meta.comparison) {
                 $table.cols.$TableTitle.$sortKey = $col
                 $table.meta.columnFormats += $meta.format.$prop 
@@ -604,10 +632,11 @@ Function Format-AnalyzedData {
                 }
             }
 
-            # Construct row structure and fill data
             if (-Not $Metrics) {
                 $Metrics = ($data.$prop.$sortKey.baseline.stats.Keys | Sort)
             }
+
+            # Add row labels and fill data in table
             ForEach ($metric in $Metrics) {
                 if (-Not ($table.rows.$prop.Keys -Contains $metric)) {
                     $table.rows.$prop.$metric = $row
@@ -635,8 +664,8 @@ Function Format-AnalyzedData {
                     }
                 }
             }
-
         }
+
         $table.meta.dataWidth = Get-TreeWidth $table.cols
         $table.meta.colLabelDepth = Get-TreeDepth $table.cols
         $table.meta.dataHeight = Get-TreeWidth $table.rows
@@ -735,6 +764,7 @@ Function Format-Quartiles {
         }
         
         $row = 0
+        # Add row labels and fill data in table
         ForEach ($sortKey in $data.$prop.Keys | Sort) {
             if (-Not $meta.comparison){
                 $table.rows.$prop.$sortProp.$sortKey = $row
@@ -879,6 +909,7 @@ Function Format-MinMaxChart {
         $col = 0
         $row = 0
         ForEach ($sortKey in $data.$prop.Keys | Sort) {
+            # Add column labels to table
             $table.cols.$TableTitle.$sortProp.$sortKey = $col
             $table.meta.columnFormats += $meta.format.$prop
             $col += 1
@@ -886,9 +917,9 @@ Function Format-MinMaxChart {
                 $prop = @{}
             }
             
+            # Add row labels and fill data in table
             ForEach ($metric in @("min", "mean", "max")) {
-                if (-Not ($table.rows.$prop.Keys -Contains $metric)) {
-
+                if (-Not ($table.rows.$prop.Keys -Contains $metric)) { 
                     if (-Not $meta.comparison){
                         $table.rows.$prop.$metric = $row
                         $row += 1
@@ -904,7 +935,6 @@ Function Format-MinMaxChart {
                     $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{}
                 }
 
-                
                 if (-Not $meta.comparison) {
                     $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
                 } else {
@@ -1011,6 +1041,7 @@ Function Format-Percentiles {
                 $table.meta.columnFormats = @($meta.format.$prop, $meta.format."% change", $meta.format.$prop)
             }
             $row = 0
+            # Add row labels and fill data in table
             ForEach ($percentile in $data.$prop.$sortKey.baseline.percentiles.Keys | Sort) {
                 $table.rows.percentiles.$percentile = $row
                 if ($meta.comparison) {
@@ -1112,6 +1143,8 @@ Function Format-Distribution {
                 }
             }
         }
+
+        # Add row labels and fill data in table
         $segmentSize = [int]($timeSamples / $NumSegments)
         $i = 0
         $row = 0
@@ -1150,6 +1183,9 @@ Function Format-Distribution {
     return $tables
 }
 
+# Selects the color of a cell, indicating whether a value
+# shows an improvement when compared to a target, and 
+# dependent on the goal (increase/decrease) for the given value  
 Function Select-Color ($cell, $value, $target, $goal) {
     if ( $goal -eq "increase") {
         if ($value -ge $target) {
@@ -1171,6 +1207,7 @@ Function Select-Color ($cell, $value, $target, $goal) {
     return $cell
 }
 
+# Returns statistical metrics computed over an array of values
 Function Calculate-Stats ($arr) {
     $measures = ($arr | Measure -Average -Maximum -Minimum -Sum)
     $stats = @{
@@ -1221,6 +1258,7 @@ Function Calculate-Stats ($arr) {
     return $stats
 }
 
+# Calculates the width of a tree data structure
 Function Get-TreeWidth ($Tree) {
     if ($Tree.GetType().Name -eq "Int32") {
         return 1
@@ -1232,6 +1270,7 @@ Function Get-TreeWidth ($Tree) {
     return $width
 }
 
+# Calculates the depth of a tree data structure
 Function Get-TreeDepth ($Tree){
     if ($Tree.GetType().Name -eq "Int32") {
         return 0
@@ -1243,13 +1282,14 @@ Function Get-TreeDepth ($Tree){
     return ($depths | Measure -Maximum).Maximum + 1
 }
 
-Function Sort-ByKey {
+# Sorts an array of objects by the value of an indicated property
+Function Sort-ByProp {
     param(
         [Parameter()]
         [PSObject] $Data,
 
         [Parameter()]
-        [string] $key
+        [string] $Prop
     )
 
     if ($Data.length -eq 1) {
@@ -1260,14 +1300,14 @@ Function Sort-ByKey {
     $arr1 = $Data[0 .. ([int]($Data.length / 2) - 1)]
     $arr2 = $Data[[int]($Data.length / 2) .. ($Data.length - 1)]
 
-    [array] $arr1 = Sort-ByKey -Data $arr1 -key $key
-    [array] $arr2 = Sort-ByKey -Data $arr2 -key $key
+    [array] $arr1 = Sort-ByProp -Data $arr1 -Prop $prop
+    [array] $arr2 = Sort-ByProp -Data $arr2 -Prop $prop
     $sorted = @()
     $idx1 = 0
     $idx2 = 0
     
     while ($idx1 -lt $arr1.length -and $idx2 -lt $arr2.length) {
-        if ($arr1[$idx1].$key -le $arr2[$idx2].$key) {
+        if ($arr1[$idx1].$prop -le $arr2[$idx2].$prop) {
             $sorted = $sorted + $arr1[$idx1]
             $idx1 += 1
         } else {
@@ -1290,12 +1330,10 @@ Function Sort-ByKey {
 
 Function Create-ExcelSheet {
     param (
-        [Parameter(Mandatory=$true, 
-                    HelpMessage="Baseline input data to be saved as Excel file.")] 
+        [Parameter(Mandatory=$true)] 
         [PSObject[]]$Tables,
 
-        [Parameter(Mandatory=$true, 
-                    HelpMessage="Excel file name.")]
+        [Parameter(Mandatory=$true)]
         [string]$ExcelFileName,
 
         [Parameter()]
@@ -1529,7 +1567,6 @@ Function Fill-RowLabels ($Worksheet, $rows, $startRow, $col) {
                 $range[1] = $startRow + $rows[$label]
             }
         }    
-        
     }
     return $range
 }
