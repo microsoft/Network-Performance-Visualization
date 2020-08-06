@@ -63,33 +63,26 @@ Function Network-Data-Visualization {
         
     )
     $tool = ""
+    # Parse files into raw data
     if ($NTTTCP) {
-        $baselineRaw = Parse-Files -NTTTCP -DirName $BaselineDir
-        $testRaw = $null
-        if ($TestDir) {
-            $testRaw = Parse-Files -NTTTCP -DirName $TestDir
-        } 
         $tool = "NTTTCP"
+
     } elseif ($LATTE) {
-        $baselineRaw = Parse-Files -LATTE -DirName $BaselineDir
-        $test = $null
-        if ($TestDir) {
-            $testRaw = Parse-Files -LATTE -DirName $TestDir
-        }
         $tool = "LATTE"
+
     } elseif ($CTStraffic) {
-        $baselineRaw = Parse-Files -CTStraffic -DirName $BaselineDir
-        $testRaw = $null
-        if ($TestDir) {
-            $testRaw = Parse-Files -CTStraffic -DirName $TestDir
-        } 
         $tool = "CTStraffic"
     }
 
+    $baselineRaw = Parse-Files -Tool $tool -DirName $BaselineDir
+    $testRaw = $null
+    if ($TestDir) {
+        $testRaw = Parse-Files -Tool $tool -DirName $TestDir
+    } 
+
     $processedData = Process-Data -BaselineDataObj $baselineRaw -TestDataObj $testRaw
-    [Array] $tables = @()
 
-
+    [Array] $tables = @() 
     if (@("NTTTCP", "CTStraffic") -Contains $tool) {
         $tables += Format-RawData -DataObj $processedData -TableTitle $tool
         $tables += "NEW"
@@ -98,7 +91,7 @@ Function Network-Data-Visualization {
         $tables += Format-MinMaxChart -DataObj $processedData -TableTitle $tool
         $tables += "NEW" 
     } elseif (@("LATTE") -Contains $tool ) {
-        $tables += Format-Distribution -DataObj $processedData -TableTitle $tool -NumSegments 200
+        $tables += Format-Distribution -DataObj $processedData -TableTitle $tool -SubSampleRate 50
         $tables += "NEW"
         $tables += Format-AnalyzedData -DataObj $processedData -TableTitle $tool
     }
@@ -107,7 +100,6 @@ Function Network-Data-Visualization {
     $fileName = Create-ExcelSheet -Tables $tables -ExcelFileName "$tool Report" -SavePath $SavePath
 
     Write-Host "Created report at $filename"
-    
 }
 
 # File Parsing ------------------------------------------------------------------------------------
@@ -115,20 +107,17 @@ Function Network-Data-Visualization {
 Function Parse-Files {
     param (
         [Parameter(Mandatory=$true)] [string]$DirName, 
-        [Parameter()] [switch] $NTTTCP, 
-        [Parameter()] [switch] $LATTE, 
-        [Parameter()] [switch] $CTStraffic
+        [Parameter()] [string] $Tool
     )
 
     try {
-        $ErrorActionPreference = "Stop"
         $files = Get-ChildItem $DirName
     } catch {
         Write-Warning "Failed to open directory at path: $DirName"
         Write-Error $_.Exception.Message
     }
 
-    if ($NTTTCP) {
+    if ($Tool -eq "NTTTCP") {
         [Array] $dataEntries = @()
         ForEach ($file in $files) {
             $fileName = $file.FullName
@@ -136,7 +125,7 @@ Function Parse-Files {
                 $ErrorActionPreference = "Stop"
                 $dataEntry = Parse-NTTTCP -FileName $fileName
             } catch {
-                Write-Warning "NTTTCP Parser failed to parse file $fileName"
+                Write-Warning "Error at Parse-NTTTCP: failed to parse file $fileName"
                 Write-Error $_.Exception.Message
             }
             $dataEntries += ,$dataEntry
@@ -163,7 +152,7 @@ Function Parse-Files {
         }
         return $rawData
 
-    } elseif ($LATTE) {
+    } elseif ($Tool -eq "LATTE") {
         [Array] $dataEntries = @() 
         ForEach ($file in $files) {
             $fileName = $file.FullName
@@ -171,7 +160,7 @@ Function Parse-Files {
                 $ErrorActionPreference = "Stop"
                 $dataEntry = Parse-LATTE -FileName $fileName
             } catch {
-                Write-Warning "LATTE Parser failed to parse file $fileName"
+                Write-Warning "Error at Parse-LATTE: failed to parse file $fileName"
                 Write-Error $_.Exception.Message
             }
             $dataEntries += ,$dataEntry
@@ -194,7 +183,7 @@ Function Parse-Files {
             "data" = $dataEntries
         }
         return $rawData
-    } elseif ($CTStraffic) {
+    } elseif ($Tool -eq "CTStraffic") {
         [Array] $dataEntries = @() 
         ForEach ($file in $files) {
             $fileName = $file.FullName
@@ -202,7 +191,7 @@ Function Parse-Files {
                 $ErrorActionPreference = "Stop"
                 $dataEntry = Parse-CTStraffic -FileName $fileName
             } catch {
-                Write-Warning "NTTTCP Parser failed to parse file $fileName"
+                Write-Warning "Error at Parse-CTStraffic: failed to parse file $fileName"
                 Write-Error $_.Exception.Message
             }
             $dataEntries += ,$dataEntry
@@ -300,92 +289,96 @@ Function Process-Data {
         [Parameter(Mandatory=$true)] [PSobject[]] $BaselineDataObj,
         [Parameter()] [PSobject[]] $TestDataObj
     )
-
-    $processedDataObj = @{
-        "meta" = $BaselineDataObj.meta
-        "data" = @{}
-        "rawData" = @{
-            "baseline" = $BaselineDataObj.data
-        }
-    }
-    if ($TestDataObj) {
-        $processedDataObj.meta.comparison = $true
-        $processedDataObj.rawData.test = $TestDataObj.data
-    }
-
-    $sortProp = $BaselineDataObj.meta.sortProp
-    ForEach ($prop in ([Array]$BaselineDataObj.data)[0].Keys) {
-        if (($prop -eq $BaselineDataObj.meta.sortProp) -or ($BaselineDataObj.meta.noTable -Contains $prop)) {
-            continue
-        }
-
-        # Organize baseline data by sortProp values
-        $processedDataObj.data.$prop = @{}
-        $modes = @("baseline")
-        ForEach($item in $BaselineDataObj.data) {
-            $sortKey = "allData"
-            if ($sortProp) {
-                $sortKey = $item.$sortProp 
-            } 
-            if (-Not ($processedDataObj.data.$prop.Keys -Contains $sortKey)) {
-                $processedDataObj.data.$prop.$sortKey = @{
-                    "baseline" = @{
-                        "orderedData" = @()
-                    }
-                }
+    try {
+        $processedDataObj = @{
+            "meta" = $BaselineDataObj.meta
+            "data" = @{}
+            "rawData" = @{
+                "baseline" = $BaselineDataObj.data
             }
-            $processedDataObj.data.$prop.$sortKey.baseline.orderedData += $item.$prop
+        }
+        if ($TestDataObj) {
+            $processedDataObj.meta.comparison = $true
+            $processedDataObj.rawData.test = $TestDataObj.data
         }
 
-        # Organize test data by sortProp values, if test data is provided
-        if ($TestDataObj) {
-            $modes += "test"
-            ForEach ($item in $TestDataObj.data) {
+        $sortProp = $BaselineDataObj.meta.sortProp
+        ForEach ($prop in ([Array]$BaselineDataObj.data)[0].Keys) {
+            if (($prop -eq $BaselineDataObj.meta.sortProp) -or ($BaselineDataObj.meta.noTable -Contains $prop)) {
+                continue
+            }
+
+            # Organize baseline data by sortProp values
+            $processedDataObj.data.$prop = @{}
+            $modes = @("baseline")
+            ForEach($item in $BaselineDataObj.data) {
                 $sortKey = "allData"
                 if ($sortProp) {
                     $sortKey = $item.$sortProp 
-                }
-                if (-Not ($processedDataObj.data.$prop.$sortKey.Keys -Contains "test")) {
-                    $processedDataObj.data.$prop.$sortKey.test = @{
-                        "orderedData" = @()
+                } 
+                if (-Not ($processedDataObj.data.$prop.Keys -Contains $sortKey)) {
+                    $processedDataObj.data.$prop.$sortKey = @{
+                        "baseline" = @{
+                            "orderedData" = @()
+                        }
                     }
-                    $processedDataObj.data.$prop.$sortKey."% change" = @{}
                 }
-                $processedDataObj.data.$prop.$sortKey.test.orderedData += $item.$prop
+                $processedDataObj.data.$prop.$sortKey.baseline.orderedData += $item.$prop
+            }
+
+            # Organize test data by sortProp values, if test data is provided
+            if ($TestDataObj) {
+                $modes += "test"
+                ForEach ($item in $TestDataObj.data) {
+                    $sortKey = "allData"
+                    if ($sortProp) {
+                        $sortKey = $item.$sortProp 
+                    }
+                    if (-Not ($processedDataObj.data.$prop.$sortKey.Keys -Contains "test")) {
+                        $processedDataObj.data.$prop.$sortKey.test = @{
+                            "orderedData" = @()
+                        }
+                        $processedDataObj.data.$prop.$sortKey."% change" = @{}
+                    }
+                    $processedDataObj.data.$prop.$sortKey.test.orderedData += $item.$prop
+                }
+            }
+
+            # Calculate stats and percentiles for each sortKey, calculate % change if necessary
+            ForEach ($sortKey in $processedDataObj.data.$prop.Keys) {
+                $percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
+                                         99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
+                ForEach ($mode in $modes) {
+                    $processedDataObj.data.$prop.$sortKey.$mode.orderedData = $processedDataObj.data.$prop.$sortKey.$mode.orderedData | Sort
+                    $stats = Calculate-Stats -arr $processedDataObj.data.$prop.$sortKey.$mode.orderedData
+                    $processedDataObj.data.$prop.$sortKey.$mode.stats = $stats
+                    $processedDataObj.data.$prop.$sortKey.$mode.percentiles = @{}
+                    ForEach ($percentile in $percentiles) {
+                        $idx = [int] (($percentile / 100) * ($processedDataObj.data.$prop.$sortKey.$mode.orderedData.Count - 1))
+                        $value = $processedDataObj.data.$prop.$sortKey.$mode.orderedData[$idx]
+                        $processedDataObj.data.$prop.$sortKey.$mode.percentiles.$percentile = $value
+                    }
+                } 
+                if ($TestDataObj) {
+                    $processedDataObj.data.$prop.$sortKey."% change".stats = @{}
+                    ForEach ($metric in $processedDataObj.data.$prop.$sortKey.$mode.stats.Keys) {
+                        $diff = $processedDataObj.data.$prop.$sortKey."test".stats.$metric - $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric
+                        $percentChange = 100 * ($diff / [math]::Abs( $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric))
+                        $processedDataObj.data.$prop.$sortKey."% change".stats.$metric = $percentChange
+                    }
+                    $processedDataObj.data.$prop.$sortKey."% change".percentiles = @{}
+                    ForEach ($percentile in $percentiles) {
+                        $percentChange = 100 * (($processedDataObj.data.$prop.$sortKey."test".percentiles.$percentile / $processedDataObj.data.$prop.$sortKey."baseline".percentiles.$percentile) - 1)
+                        $processedDataObj.data.$prop.$sortKey."% change".percentiles.$percentile = $percentChange
+                    }
+                } 
             }
         }
-
-        # Calculate stats and percentiles for each sortKey, calculate % change if necessary
-        ForEach ($sortKey in $processedDataObj.data.$prop.Keys) {
-            $percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
-                                     99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
-            ForEach ($mode in $modes) {
-                $processedDataObj.data.$prop.$sortKey.$mode.orderedData = $processedDataObj.data.$prop.$sortKey.$mode.orderedData | Sort
-                $stats = Calculate-Stats -arr $processedDataObj.data.$prop.$sortKey.$mode.orderedData
-                $processedDataObj.data.$prop.$sortKey.$mode.stats = $stats
-                $processedDataObj.data.$prop.$sortKey.$mode.percentiles = @{}
-                ForEach ($percentile in $percentiles) {
-                    $idx = [int] (($percentile / 100) * ($processedDataObj.data.$prop.$sortKey.$mode.orderedData.Count - 1))
-                    $value = $processedDataObj.data.$prop.$sortKey.$mode.orderedData[$idx]
-                    $processedDataObj.data.$prop.$sortKey.$mode.percentiles.$percentile = $value
-                }
-            } 
-            if ($TestDataObj) {
-                $processedDataObj.data.$prop.$sortKey."% change".stats = @{}
-                ForEach ($metric in $processedDataObj.data.$prop.$sortKey.$mode.stats.Keys) {
-                    $diff = $processedDataObj.data.$prop.$sortKey."test".stats.$metric - $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric
-                    $percentChange = 100 * ($diff / [math]::Abs( $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric))
-                    $processedDataObj.data.$prop.$sortKey."% change".stats.$metric = $percentChange
-                }
-                $processedDataObj.data.$prop.$sortKey."% change".percentiles = @{}
-                ForEach ($percentile in $percentiles) {
-                    $percentChange = 100 * (($processedDataObj.data.$prop.$sortKey."test".percentiles.$percentile / $processedDataObj.data.$prop.$sortKey."baseline".percentiles.$percentile) - 1)
-                    $processedDataObj.data.$prop.$sortKey."% change".percentiles.$percentile = $percentChange
-                }
-            } 
-        }
+        return $processedDataObj
+    } catch {
+        Write-Warning "Error in Process-Data"
+        Write-Error $_.Exception.Message
     }
-    return $processedDataObj
 }
  
 # Table Formatting -------------------------------------------------------------------
@@ -406,166 +399,171 @@ Function Format-RawData {
         [Parameter()] [String] $TableTitle = ""
     )
 
-    $tables = @() 
-    $meta = $DataObj.meta
-    $sortProp = $meta.sortProp 
-    $legend = @{
-        "meta" = @{
-            "colLabelDepth" = 1
-            "rowLabelDepth" = 1
-            "dataWidth" = 2
-            "dataHeight" = 3
-        }
-        "rows" = @{
-            " " = 0
-            "  " = 1
-            "   " = 2
-        }
-        "cols" = @{
-            "legend" = @{
+    try {
+        $tables = @() 
+        $meta = $DataObj.meta
+        $sortProp = $meta.sortProp 
+        $legend = @{
+            "meta" = @{
+                "colLabelDepth" = 1
+                "rowLabelDepth" = 1
+                "dataWidth" = 2
+                "dataHeight" = 3
+            }
+            "rows" = @{
                 " " = 0
                 "  " = 1
-            }
-        }
-        "data" = @{
-            "legend" = @{
-                " " = @{
-                    " " = @{
-                        "value" = "Test values are compared against the mean basline value."
-                    }
-                    "  " = @{
-                        "value" = "Test values which show improvement are colored green:"
-                    }
-                    "   " = @{
-                        "value" = "Test values which show regression are colored red:"
-                    }
-                }
-                "  " = @{
-                    "  " = @{
-                        "value" = "Improvement"
-                        "fontColor" = $GREEN
-                        "cellColor" = $LIGHTGREEN
-                    }
-                    "   " = @{
-                        "value" = "Regression"
-                        "fontColor" = $RED
-                        "cellColor" = $LIGHTRED
-                    }
-                } 
-            }
-        }
-    }
-
-    if ($meta.comparison) {
-        $tables += $legend
-    }
-
-    # Fill single array with all data and sort, label data as baseline/test if necessary
-    [Array] $data = @()
-    $baseData = $DataObj.rawData.baseline
-    ForEach ($entry in $baseData) {
-        if ($meta.comparison) {
-            $entry.baseline = $true
-        }
-        $data += $entry
-    }
-
-    if ($meta.comparison) {
-        $testData = $DataObj.rawData.test
-        ForEach ($entry in $testData) {
-            $data += $entry
-        }
-    }
-
-    $data = Sort-ByProp -Data $data -Prop $sortProp
-    ForEach ($prop in $dataObj.data.Keys) {
-        $table = @{
-            "rows" = @{
-                $prop = @{}
+                "   " = 2
             }
             "cols" = @{
-                $TableTitle = @{}
-            }
-            "meta" = @{
-                "columnFormats" = @()
-            }
-            "data"  = @{
-                $TableTitle = @{}
-            }
-        }
-        $col = 0
-        $row = 0
-        ForEach ($entry in $data){
-            $sortKey = $entry.$sortProp
-
-            # Add column labels to table
-            if (-Not ($table.cols.$TableTitle.Keys -contains $sortKey)) {
-                if ($meta.comparison) {
-                    $table.cols.$TableTitle.$sortKey = @{
-                        "baseline" = $col
-                        "test" = $col + 1
-                    }
-                    $table.meta.columnFormats += $meta.format.$prop
-                    $table.meta.columnFormats += $meta.format.$prop
-                    $col += 2
-                    $table.data.$TableTitle.$sortKey = @{
-                        "baseline" = @{
-                            $prop = @{}
-                        }
-                        "test" = @{
-                            $prop = @{}
-                        }
-                    }
-                } else {
-                    $table.cols.$TableTitle.$sortKey = $col
-                    $table.meta.columnFormats += $meta.format.$prop
-                    $col += 1
-                    $table.data.$TableTitle.$sortKey = @{
-                        $prop = @{}
-                    }
+                "legend" = @{
+                    " " = 0
+                    "  " = 1
                 }
             }
+            "data" = @{
+                "legend" = @{
+                    " " = @{
+                        " " = @{
+                            "value" = "Test values are compared against the mean basline value."
+                        }
+                        "  " = @{
+                            "value" = "Test values which show improvement are colored green:"
+                        }
+                        "   " = @{
+                            "value" = "Test values which show regression are colored red:"
+                        }
+                    }
+                    "  " = @{
+                        "  " = @{
+                            "value" = "Improvement"
+                            "fontColor" = $GREEN
+                            "cellColor" = $LIGHTGREEN
+                        }
+                        "   " = @{
+                            "value" = "Regression"
+                            "fontColor" = $RED
+                            "cellColor" = $LIGHTRED
+                        }
+                    } 
+                }
+            }
+        }
 
-            # Add row labels and fill data in table
-            $filename = $entry.fileName
-            $table.rows.$prop.$filename = $row
-            $row += 1
+        if ($meta.comparison) {
+            $tables += $legend
+        }
+
+        # Fill single array with all data and sort, label data as baseline/test if necessary
+        [Array] $data = @()
+        $baseData = $DataObj.rawData.baseline
+        ForEach ($entry in $baseData) {
             if ($meta.comparison) {
-                if ($entry.baseline) {
-                    $table.data.$TableTitle.$sortKey.baseline.$prop.$filename = @{
-                        "value" = $entry.$prop
-                    }
-                } else {
-                    $table.data.$TableTitle.$sortKey.test.$prop.$filename = @{
-                        "value" = $entry.$prop
-                    }
-                    $params = @{
-                        "cell" = $table.data.$TableTitle.$sortKey.test.$prop.$filename
-                        "value" = $entry.$prop
-                        "target" = $DataObj.data.$prop.$sortKey.baseline.stats.mean
-                        "goal" = $meta.goal.$prop
-                    }
-                    $table.data.$TableTitle.$sortKey.test.$prop.$filename = Select-Color @params
-                }
-            } else {
-                $table.data.$TableTitle.$sortKey.$prop.$filename = @{
-                    "value" = $entry.$prop
-                }
+                $entry.baseline = $true
+            }
+            $data += $entry
+        }
+
+        if ($meta.comparison) {
+            $testData = $DataObj.rawData.test
+            ForEach ($entry in $testData) {
+                $data += $entry
             }
         }
-        $table.meta.dataWidth = Get-TreeWidth $table.cols
-        $table.meta.colLabelDepth = Get-TreeDepth $table.cols
-        $table.meta.dataHeight = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-        $tables = $tables + $table
-    }
 
-    ForEach ($entry in $data) {
-        if ($entry.baseline) {
-            $entry.Remove("baseline")
+        $data = Sort-ByProp -Data $data -Prop $sortProp
+        ForEach ($prop in $dataObj.data.Keys) {
+            $table = @{
+                "rows" = @{
+                    $prop = @{}
+                }
+                "cols" = @{
+                    $TableTitle = @{}
+                }
+                "meta" = @{
+                    "columnFormats" = @()
+                }
+                "data"  = @{
+                    $TableTitle = @{}
+                }
+            }
+            $col = 0
+            $row = 0
+            ForEach ($entry in $data){
+                $sortKey = $entry.$sortProp
+
+                # Add column labels to table
+                if (-Not ($table.cols.$TableTitle.Keys -contains $sortKey)) {
+                    if ($meta.comparison) {
+                        $table.cols.$TableTitle.$sortKey = @{
+                            "baseline" = $col
+                            "test" = $col + 1
+                        }
+                        $table.meta.columnFormats += $meta.format.$prop
+                        $table.meta.columnFormats += $meta.format.$prop
+                        $col += 2
+                        $table.data.$TableTitle.$sortKey = @{
+                            "baseline" = @{
+                                $prop = @{}
+                            }
+                            "test" = @{
+                                $prop = @{}
+                            }
+                        }
+                    } else {
+                        $table.cols.$TableTitle.$sortKey = $col
+                        $table.meta.columnFormats += $meta.format.$prop
+                        $col += 1
+                        $table.data.$TableTitle.$sortKey = @{
+                            $prop = @{}
+                        }
+                    }
+                }
+
+                # Add row labels and fill data in table
+                $filename = $entry.fileName
+                $table.rows.$prop.$filename = $row
+                $row += 1
+                if ($meta.comparison) {
+                    if ($entry.baseline) {
+                        $table.data.$TableTitle.$sortKey.baseline.$prop.$filename = @{
+                            "value" = $entry.$prop
+                        }
+                    } else {
+                        $table.data.$TableTitle.$sortKey.test.$prop.$filename = @{
+                            "value" = $entry.$prop
+                        }
+                        $params = @{
+                            "cell" = $table.data.$TableTitle.$sortKey.test.$prop.$filename
+                            "value" = $entry.$prop
+                            "target" = $DataObj.data.$prop.$sortKey.baseline.stats.mean
+                            "goal" = $meta.goal.$prop
+                        }
+                        $table.data.$TableTitle.$sortKey.test.$prop.$filename = Select-Color @params
+                    }
+                } else {
+                    $table.data.$TableTitle.$sortKey.$prop.$filename = @{
+                        "value" = $entry.$prop
+                    }
+                }
+            }
+            $table.meta.dataWidth = Get-TreeWidth $table.cols
+            $table.meta.colLabelDepth = Get-TreeDepth $table.cols
+            $table.meta.dataHeight = Get-TreeWidth $table.rows
+            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+            $tables = $tables + $table
         }
+
+        ForEach ($entry in $data) {
+            if ($entry.baseline) {
+                $entry.Remove("baseline")
+            }
+        }
+        return $tables
+    } catch {
+        Write-Warning "Error at Format-RawData"
+        Write-Error $_.Exception.Message
     }
-    return $tables
 }
 
 # This function formats stats metrics (mine, mean, max, etc) into a table. When run in comparison 
@@ -579,100 +577,105 @@ Function Format-AnalyzedData {
         [Parameter()] [Array] $Metrics=$null
     )
     
-    $tables = @()
-    $data = $dataObj.data
-    $meta = $dataObj.meta
-    ForEach ($prop in $data.keys) { 
-        $table = @{
-            "rows" = @{
-                $prop = @{}
-            }
-            "cols" = @{
-                $TableTitle = @{}
-            }
-            "meta" = @{
-                "columnFormats" = @()
-            }
-            "data" = @{
-                $TableTitle = @{}
-            }
-        }
-        $col = 0
-        $row = 0
-        ForEach ($sortKey in $data.$prop.Keys | Sort) { 
-
-            # Add column labels to table
-            if (-Not $meta.comparison) {
-                $table.cols.$TableTitle.$sortKey = $col
-                $table.meta.columnFormats += $meta.format.$prop 
-                $table.data.$TableTitle.$sortKey = @{
+    try {
+        $tables = @()
+        $data = $dataObj.data
+        $meta = $dataObj.meta
+        ForEach ($prop in $data.keys) { 
+            $table = @{
+                "rows" = @{
                     $prop = @{}
                 }
-                $col += 1
-            } else {
-                $table.cols.$TableTitle.$sortKey = @{
-                    "baseline" = $col
-                    "% Change" = $col + 1
-                    "test" = $col + 2
+                "cols" = @{
+                    $TableTitle = @{}
                 }
-                $table.meta.columnFormats += $meta.format.$prop
-                $table.meta.columnFormats += $meta.format."% change"
-                $table.meta.columnFormats += $meta.format.$prop
-                $col += 3
-                $table.data.$TableTitle.$sortKey = @{
-                    "baseline" = @{
-                        $prop = @{}
-                    }
-                    "% Change" = @{
-                        $prop = @{}
-                    }
-                    "test" = @{
-                        $prop = @{}
-                    }
+                "meta" = @{
+                    "columnFormats" = @()
+                }
+                "data" = @{
+                    $TableTitle = @{}
                 }
             }
+            $col = 0
+            $row = 0
+            ForEach ($sortKey in $data.$prop.Keys | Sort) { 
 
-            if (-Not $Metrics) {
-                $Metrics = ($data.$prop.$sortKey.baseline.stats.Keys | Sort)
-            }
-
-            # Add row labels and fill data in table
-            ForEach ($metric in $Metrics) {
-                if (-Not ($table.rows.$prop.Keys -Contains $metric)) {
-                    $table.rows.$prop.$metric = $row
-                    $row += 1
-                }
+                # Add column labels to table
                 if (-Not $meta.comparison) {
-                    $table.data.$TableTitle.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
-                } else {
-                    $table.data.$TableTitle.$sortKey.baseline.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
-                    $table.data.$TableTitle.$sortKey.test.$prop.$metric = @{"value" = $data.$prop.$sortKey.test.stats.$metric}
-                    
-                    $percentChange = $data.$prop.$sortKey."% change".stats.$metric
-                    $table.data.$TableTitle.$sortKey."% change".$prop.$metric = @{"value" = "$percentChange %"}
-                    $params = @{
-                        "cell" = $table.data.$TableTitle.$sortKey."% change".$prop.$metric
-                        "value" = $data.$prop.$sortKey.test.stats.$metric
-                        "target" = $data.$prop.$sortKey.baseline.stats.$metric
-                        "goal" = $meta.goal.$prop
+                    $table.cols.$TableTitle.$sortKey = $col
+                    $table.meta.columnFormats += $meta.format.$prop 
+                    $table.data.$TableTitle.$sortKey = @{
+                        $prop = @{}
                     }
-                    if (@("std dev", "variance", "kurtosis", "std err", "range") -Contains $metric) {
-                        $params.goal = "decrease"
-                        $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
-                    } elseif ( -Not (@("sum", "count") -contains $metric)) {
-                        $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
+                    $col += 1
+                } else {
+                    $table.cols.$TableTitle.$sortKey = @{
+                        "baseline" = $col
+                        "% Change" = $col + 1
+                        "test" = $col + 2
+                    }
+                    $table.meta.columnFormats += $meta.format.$prop
+                    $table.meta.columnFormats += $meta.format."% change"
+                    $table.meta.columnFormats += $meta.format.$prop
+                    $col += 3
+                    $table.data.$TableTitle.$sortKey = @{
+                        "baseline" = @{
+                            $prop = @{}
+                        }
+                        "% Change" = @{
+                            $prop = @{}
+                        }
+                        "test" = @{
+                            $prop = @{}
+                        }
+                    }
+                }
+
+                if (-Not $Metrics) {
+                    $Metrics = ($data.$prop.$sortKey.baseline.stats.Keys | Sort)
+                }
+
+                # Add row labels and fill data in table
+                ForEach ($metric in $Metrics) {
+                    if (-Not ($table.rows.$prop.Keys -Contains $metric)) {
+                        $table.rows.$prop.$metric = $row
+                        $row += 1
+                    }
+                    if (-Not $meta.comparison) {
+                        $table.data.$TableTitle.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
+                    } else {
+                        $table.data.$TableTitle.$sortKey.baseline.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
+                        $table.data.$TableTitle.$sortKey.test.$prop.$metric = @{"value" = $data.$prop.$sortKey.test.stats.$metric}
+                    
+                        $percentChange = $data.$prop.$sortKey."% change".stats.$metric
+                        $table.data.$TableTitle.$sortKey."% change".$prop.$metric = @{"value" = "$percentChange %"}
+                        $params = @{
+                            "cell" = $table.data.$TableTitle.$sortKey."% change".$prop.$metric
+                            "value" = $data.$prop.$sortKey.test.stats.$metric
+                            "target" = $data.$prop.$sortKey.baseline.stats.$metric
+                            "goal" = $meta.goal.$prop
+                        }
+                        if (@("std dev", "variance", "kurtosis", "std err", "range") -Contains $metric) {
+                            $params.goal = "decrease"
+                            $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
+                        } elseif ( -Not (@("sum", "count") -contains $metric)) {
+                            $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
+                        }
                     }
                 }
             }
-        }
 
-        $table.meta.dataWidth = Get-TreeWidth $table.cols
-        $table.meta.colLabelDepth = Get-TreeDepth $table.cols
-        $table.meta.dataHeight = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-        $tables = $tables + $table
+            $table.meta.dataWidth = Get-TreeWidth $table.cols
+            $table.meta.colLabelDepth = Get-TreeDepth $table.cols
+            $table.meta.dataHeight = Get-TreeWidth $table.rows
+            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+            $tables = $tables + $table
+        }
+        return $tables
+    } catch {
+        Write-Warning "Error at Format-AnalyzedData"
+        Write-Error $_.Exception.Message
     }
-    return $tables
 }
 
 # This function formats the quartiles of each data range and creates a stacked bar chart
@@ -683,134 +686,137 @@ Function Format-Quartiles {
 
         [Parameter()] [String] $TableTitle = ""
     )
-
-    $tables = @()
-    $data = $DataObj.data
-    $meta = $DataObj.meta
-    $sortProp = $meta.sortProp
-    ForEach ($prop in $data.Keys) { 
-        $format = $meta.format.$prop
-        $table = @{
-            "rows" = @{
-                $prop = @{
-                    $sortProp = @{}
-                }
-            }
-            "cols" = @{
-                $TableTitle = @{
-                    "min" = 0
-                    "Q1" = 1
-                    "Q2" = 2
-                    "Q3" = 3
-                    "Q4" = 4
-                }
-            }
-            "meta" = @{
-                "columnFormats" = @($format, $format, $format, $format, $format )
-                "dataWidth" = 5
-            }
-            "data" = @{
-                $TableTitle = @{
-                    "min" = @{
-                        $prop = @{
-                            $sortProp = @{}
-                        }
-                    }
-                    "Q1" = @{
-                        $prop = @{
-                            $sortProp = @{}
-                        }
-                    }
-                    "Q2" = @{
-                        $prop = @{
-                            $sortProp = @{}
-                        }
-                    }
-                    "Q3" = @{
-                        $prop = @{
-                            $sortProp = @{}
-                        }
-                    }
-                    "Q4" = @{
-                        $prop = @{
-                            $sortProp = @{}
-                        }
+    try {
+        $tables = @()
+        $data = $DataObj.data
+        $meta = $DataObj.meta
+        $sortProp = $meta.sortProp
+        ForEach ($prop in $data.Keys) { 
+            $format = $meta.format.$prop
+            $table = @{
+                "rows" = @{
+                    $prop = @{
+                        $sortProp = @{}
                     }
                 }
-            }
-            "chartSettings" = @{ 
-                "chartType"=52
-                "plotBy" = 2
-                "xOffset" = 1
-                "YOffset" = 1
-                "title"="$prop quartiles"
-                "hideLegend" = $true
-                "dataTable" = $true
-                "seriesSettings"= @{
-                    1 = @{
-                        "hide"=$true
+                "cols" = @{
+                    $TableTitle = @{
+                        "min" = 0
+                        "Q1" = 1
+                        "Q2" = 2
+                        "Q3" = 3
+                        "Q4" = 4
                     }
                 }
-                "axisSettings" = @{
-                    1 = @{
-                        "majorGridlines" = $true
+                "meta" = @{
+                    "columnFormats" = @($format, $format, $format, $format, $format )
+                    "dataWidth" = 5
+                }
+                "data" = @{
+                    $TableTitle = @{
+                        "min" = @{
+                            $prop = @{
+                                $sortProp = @{}
+                            }
+                        }
+                        "Q1" = @{
+                            $prop = @{
+                                $sortProp = @{}
+                            }
+                        }
+                        "Q2" = @{
+                            $prop = @{
+                                $sortProp = @{}
+                            }
+                        }
+                        "Q3" = @{
+                            $prop = @{
+                                $sortProp = @{}
+                            }
+                        }
+                        "Q4" = @{
+                            $prop = @{
+                                $sortProp = @{}
+                            }
+                        }
                     }
-                    2 = @{
-                        "minorGridlines" = $true
-                        "title" = $meta.units[$prop]
+                }
+                "chartSettings" = @{ 
+                    "chartType"=52
+                    "plotBy" = 2
+                    "xOffset" = 1
+                    "YOffset" = 1
+                    "title"="$prop quartiles"
+                    "hideLegend" = $true
+                    "dataTable" = $true
+                    "seriesSettings"= @{
+                        1 = @{
+                            "hide"=$true
+                        }
+                    }
+                    "axisSettings" = @{
+                        1 = @{
+                            "majorGridlines" = $true
+                        }
+                        2 = @{
+                            "minorGridlines" = $true
+                            "title" = $meta.units[$prop]
+                        }
                     }
                 }
             }
-        }
         
-        $row = 0
-        # Add row labels and fill data in table
-        ForEach ($sortKey in $data.$prop.Keys | Sort) {
-            if (-Not $meta.comparison){
-                $table.rows.$prop.$sortProp.$sortKey = $row
-                $row += 1
-                $table.data.$TableTitle.min.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.stats.min }
-                $table.data.$TableTitle.Q1.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[25] - $data.$prop.$sortKey.baseline.stats.min }
-                $table.data.$TableTitle.Q2.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[50] - $data.$prop.$sortKey.baseline.percentiles[25] } 
-                $table.data.$TableTitle.Q3.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[75] - $data.$prop.$sortKey.baseline.percentiles[50]}
-                $table.data.$TableTitle.Q4.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.stats.max - $data.$prop.$sortKey.baseline.percentiles[75] }
-            } else {
-                $table.rows.$prop.$sortProp.$sortKey = @{
-                    "baseline" = $row
-                    "test" = $row + 1
+            $row = 0
+            # Add row labels and fill data in table
+            ForEach ($sortKey in $data.$prop.Keys | Sort) {
+                if (-Not $meta.comparison){
+                    $table.rows.$prop.$sortProp.$sortKey = $row
+                    $row += 1
+                    $table.data.$TableTitle.min.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.stats.min }
+                    $table.data.$TableTitle.Q1.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[25] - $data.$prop.$sortKey.baseline.stats.min }
+                    $table.data.$TableTitle.Q2.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[50] - $data.$prop.$sortKey.baseline.percentiles[25] } 
+                    $table.data.$TableTitle.Q3.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[75] - $data.$prop.$sortKey.baseline.percentiles[50]}
+                    $table.data.$TableTitle.Q4.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.stats.max - $data.$prop.$sortKey.baseline.percentiles[75] }
+                } else {
+                    $table.rows.$prop.$sortProp.$sortKey = @{
+                        "baseline" = $row
+                        "test" = $row + 1
+                    }
+                    $row += 2
+                    $table.data.$TableTitle.min.$prop.$sortProp.$sortKey = @{
+                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.stats.min }
+                        "test" = @{ "value" = $data.$prop.$sortKey.test.stats.min}
+                    }
+                    $table.data.$TableTitle.Q1.$prop.$sortProp.$sortKey = @{
+                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[25] - $data.$prop.$sortKey.baseline.stats.min }
+                        "test" = @{ "value" = $data.$prop.$sortKey.test.percentiles[25] - $data.$prop.$sortKey.test.stats.min }
+                    }
+                    $table.data.$TableTitle.Q2.$prop.$sortProp.$sortKey = @{
+                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[50] - $data.$prop.$sortKey.baseline.percentiles[25] } 
+                        "test" = @{ "value" = $data.$prop.$sortKey.test.percentiles[50] - $data.$prop.$sortKey.test.percentiles[25] } 
+                    }
+                    $table.data.$TableTitle.Q3.$prop.$sortProp.$sortKey = @{
+                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[75] - $data.$prop.$sortKey.baseline.percentiles[50] } 
+                        "test" = @{ "value" = $data.$prop.$sortKey.test.percentiles[75] - $data.$prop.$sortKey.test.percentiles[50] }
+                    }
+                    $table.data.$TableTitle.Q4.$prop.$sortProp.$sortKey = @{
+                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.stats.max - $data.$prop.$sortKey.baseline.percentiles[75] }
+                        "test" = @{ "value" = $data.$prop.$sortKey.test.stats.max - $data.$prop.$sortKey.test.percentiles[75] }
+                    }
                 }
-                $row += 2
-                $table.data.$TableTitle.min.$prop.$sortProp.$sortKey = @{
-                    "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.stats.min }
-                    "test" = @{ "value" = $data.$prop.$sortKey.test.stats.min}
-                }
-                $table.data.$TableTitle.Q1.$prop.$sortProp.$sortKey = @{
-                    "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[25] - $data.$prop.$sortKey.baseline.stats.min }
-                    "test" = @{ "value" = $data.$prop.$sortKey.test.percentiles[25] - $data.$prop.$sortKey.test.stats.min }
-                }
-                $table.data.$TableTitle.Q2.$prop.$sortProp.$sortKey = @{
-                    "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[50] - $data.$prop.$sortKey.baseline.percentiles[25] } 
-                    "test" = @{ "value" = $data.$prop.$sortKey.test.percentiles[50] - $data.$prop.$sortKey.test.percentiles[25] } 
-                }
-                $table.data.$TableTitle.Q3.$prop.$sortProp.$sortKey = @{
-                    "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[75] - $data.$prop.$sortKey.baseline.percentiles[50] } 
-                    "test" = @{ "value" = $data.$prop.$sortKey.test.percentiles[75] - $data.$prop.$sortKey.test.percentiles[50] }
-                }
-                $table.data.$TableTitle.Q4.$prop.$sortProp.$sortKey = @{
-                    "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.stats.max - $data.$prop.$sortKey.baseline.percentiles[75] }
-                    "test" = @{ "value" = $data.$prop.$sortKey.test.stats.max - $data.$prop.$sortKey.test.percentiles[75] }
-                }
+
             }
-
+            $table.meta.dataWidth = Get-TreeWidth $table.cols
+            $table.meta.colLabelDepth = Get-TreeDepth $table.cols
+            $table.meta.dataHeight = Get-TreeWidth $table.rows
+            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+            $tables = $tables + $table
+            return $tables
         }
-        $table.meta.dataWidth = Get-TreeWidth $table.cols
-        $table.meta.colLabelDepth = Get-TreeDepth $table.cols
-        $table.meta.dataHeight = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-        $tables = $tables + $table
+    } catch {
+        Write-Warning "Error at Format-Quartiles"
+        Write-Error $_.Exception.Message
     }
-    return $tables
-
 }
 
 Function Format-MinMaxChart {
@@ -820,137 +826,143 @@ Function Format-MinMaxChart {
         [Parameter()] [String] $TableTitle = ""
     )
     
-    $tables = @()
-    $data = $DataObj.data
-    $meta = $DataObj.meta
-    $sortProp = $meta.sortProp
+    try {
+        $tables = @()
+        $data = $DataObj.data
+        $meta = $DataObj.meta
+        $sortProp = $meta.sortProp
 
-    ForEach ($prop in $data.keys) {
-        $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop) 
-        $table = @{
-            "rows" = @{
-                $prop = @{}
-            }
-            "cols" = @{
-                $TableTitle = @{
-                    $sortProp = @{}
+        ForEach ($prop in $data.keys) {
+            $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop) 
+            $table = @{
+                "rows" = @{
+                    $prop = @{}
+                }
+                "cols" = @{
+                    $TableTitle = @{
+                        $sortProp = @{}
+                    }
+                }
+                "meta" = @{
+                    "columnFormats" = @()
+                }
+                "data" = @{
+                    $TableTitle = @{
+                        $sortProp = @{}
+                    }
+                }
+                "chartSettings" = @{
+                    "chartType" = 65
+                    "plotBy" = 1
+                    "title" = $cappedProp
+                    "xOffset" = 1
+                    "yOffset" = 1
+                    "dataTable" = $true
+                    "hideLegend" = $true
+                    "axisSettings" = @{
+                        1 = @{
+                            "majorGridlines" = $true
+                        }
+                        2 = @{
+                            "minorGridlines" = $true
+                            "title" = $meta.units.$prop
+                        }
+                    }
                 }
             }
-            "meta" = @{
-                "columnFormats" = @()
-            }
-            "data" = @{
-                $TableTitle = @{
-                    $sortProp = @{}
-                }
-            }
-            "chartSettings" = @{
-                "chartType" = 65
-                "plotBy" = 1
-                "title" = $cappedProp
-                "xOffset" = 1
-                "yOffset" = 1
-                "dataTable" = $true
-                "hideLegend" = $true
-                "axisSettings" = @{
+            if ($meta.comparison) {
+                $table.chartSettings.seriesSettings = @{
                     1 = @{
-                        "majorGridlines" = $true
+                        "color" = $BLUES[2]
+                        "markerColor" = $BLUES[2]
                     }
                     2 = @{
-                        "minorGridlines" = $true
-                        "title" = $meta.units.$prop
+                        "color" = $ORANGES[2]
+                        "markerColor" = $ORANGES[2]
+                    }
+                    3 = @{
+                        "color" = $BLUES[1]
+                        "markerColor" = $BLUES[1]
+                    }
+                    4 = @{
+                        "color" = $ORANGES[1]
+                        "markerColor" = $ORANGES[1]
+                    }
+                    5 = @{
+                        "color" = $BLUES[0]
+                        "markerColor" = $BLUES[0]
+                    }
+                    6 = @{
+                        "color" = $ORANGES[0]
+                        "markerColor" = $ORANGES[0]
+                    }
+                }
+            } else {
+                $table.chartSettings.seriesSettings = @{
+                    1 = @{
+                        "color" = $BLUES[2]
+                        "markerColor" = $BLUES[2]
+                    }
+                    2 = @{
+                        "color" = $BLUES[1]
+                        "markerColor" = $BLUES[1]
+                    }
+                    3 = @{
+                        "color" = $BLUES[0]
+                        "markerColor" = $BLUES[0]
                     }
                 }
             }
-        }
-        if ($meta.comparison) {
-            $table.chartSettings.seriesSettings = @{
-                1 = @{
-                    "color" = $BLUES[2]
-                    "markerColor" = $BLUES[2]
+            $col = 0
+            $row = 0
+            ForEach ($sortKey in $data.$prop.Keys | Sort) {
+                # Add column labels to table
+                $table.cols.$TableTitle.$sortProp.$sortKey = $col
+                $table.meta.columnFormats += $meta.format.$prop
+                $col += 1
+                $table.data.$TableTitle.$sortProp.$sortKey = @{
+                    $prop = @{}
                 }
-                2 = @{
-                    "color" = $ORANGES[2]
-                    "markerColor" = $ORANGES[2]
-                }
-                3 = @{
-                    "color" = $BLUES[1]
-                    "markerColor" = $BLUES[1]
-                }
-                4 = @{
-                    "color" = $ORANGES[1]
-                    "markerColor" = $ORANGES[1]
-                }
-                5 = @{
-                    "color" = $BLUES[0]
-                    "markerColor" = $BLUES[0]
-                }
-                6 = @{
-                    "color" = $ORANGES[0]
-                    "markerColor" = $ORANGES[0]
-                }
-            }
-        } else {
-            $table.chartSettings.seriesSettings = @{
-                1 = @{
-                    "color" = $BLUES[2]
-                    "markerColor" = $BLUES[2]
-                }
-                2 = @{
-                    "color" = $BLUES[1]
-                    "markerColor" = $BLUES[1]
-                }
-                3 = @{
-                    "color" = $BLUES[0]
-                    "markerColor" = $BLUES[0]
-                }
-            }
-        }
-        $col = 0
-        $row = 0
-        ForEach ($sortKey in $data.$prop.Keys | Sort) {
-            # Add column labels to table
-            $table.cols.$TableTitle.$sortProp.$sortKey = $col
-            $table.meta.columnFormats += $meta.format.$prop
-            $col += 1
-            $table.data.$TableTitle.$sortProp.$sortKey = @{
-                $prop = @{}
-            }
             
-            # Add row labels and fill data in table
-            ForEach ($metric in @("min", "mean", "max")) {
-                if (-Not ($table.rows.$prop.Keys -Contains $metric)) { 
-                    if (-Not $meta.comparison){
-                        $table.rows.$prop.$metric = $row
-                        $row += 1
+                # Add row labels and fill data in table
+                ForEach ($metric in @("min", "mean", "max")) {
+                    if (-Not ($table.rows.$prop.Keys -Contains $metric)) { 
+                        if (-Not $meta.comparison){
+                            $table.rows.$prop.$metric = $row
+                            $row += 1
+                        } else {
+                            $table.rows.$prop.$metric = @{
+                                "baseline" = $row
+                                "test" = $row + 1
+                            } 
+                            $row += 2
+                        }
+                    }
+                    if (-Not ($table.data.$TableTitle.$sortProp.$sortKey.$prop.Keys -Contains $metric)) {
+                        $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{}
+                    }
+
+                    if (-Not $meta.comparison) {
+                        $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
                     } else {
-                        $table.rows.$prop.$metric = @{
-                            "baseline" = $row
-                            "test" = $row + 1
-                        } 
-                        $row += 2
+                        $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.baseline = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
+                        $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.test = @{"value" = $data.$prop.$sortKey.test.stats.$metric}
                     }
                 }
-                if (-Not ($table.data.$TableTitle.$sortProp.$sortKey.$prop.Keys -Contains $metric)) {
-                    $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{}
-                }
 
-                if (-Not $meta.comparison) {
-                    $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
-                } else {
-                    $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.baseline = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
-                    $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.test = @{"value" = $data.$prop.$sortKey.test.stats.$metric}
-                }
             }
-
+            $table.meta.dataWidth = Get-TreeWidth $table.cols
+            $table.meta.colLabelDepth = Get-TreeDepth $table.cols
+            $table.meta.dataHeight = Get-TreeWidth $table.rows
+            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+            $tables = $tables + $table
+            return $tables
         }
-        $table.meta.dataWidth = Get-TreeWidth $table.cols
-        $table.meta.colLabelDepth = Get-TreeDepth $table.cols
-        $table.meta.dataHeight = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-        $tables = $tables + $table
+    } catch {
+        Write-Warning "Error at Format-MinMaxChart"
+        Write-Error $_.Exception.Message
     }
-    return $tables
+    
 }
 
 Function Format-Percentiles {
@@ -959,118 +971,122 @@ Function Format-Percentiles {
 
         [Parameter()] [String] $TableTitle = ""
     )
-
-    $tables = @()
-    $data = $DataObj.data
-    $meta = $DataObj.meta
-    $sortProp = $meta.sortProp
-    $baseTitle = $TableTitle
-    ForEach ($prop in $data.Keys) {
-        ForEach ($sortKey in $data.$prop.Keys | Sort) {
-            $note = ""
-            if ($sortProp) {
-                $note = " - $sortProp $sortKey"
-                $TableTitle = "$baseTitle$note"
-            }
-            $table = @{
-                "rows" = @{
-                    "percentiles" = @{}
+    try {
+        $tables = @()
+        $data = $DataObj.data
+        $meta = $DataObj.meta
+        $sortProp = $meta.sortProp
+        $baseTitle = $TableTitle
+        ForEach ($prop in $data.Keys) {
+            ForEach ($sortKey in $data.$prop.Keys | Sort) {
+                $note = ""
+                if ($sortProp) {
+                    $note = " - $sortProp $sortKey"
+                    $TableTitle = "$baseTitle$note"
                 }
-                "cols" = @{
-                    $TableTitle = @{
-                        $prop = 0
+                $table = @{
+                    "rows" = @{
+                        "percentiles" = @{}
+                    }
+                    "cols" = @{
+                        $TableTitle = @{
+                            $prop = 0
+                        }
+                    }
+                    "meta" = @{
+                        "columnFormats" = @($meta.format.$prop)
+                    }
+                    "data" = @{
+                        $TableTitle = @{
+                            $prop = @{
+                                "percentiles" = @{}
+                            }
+                        }
+                    }
+                    "chartSettings"= @{
+                        "title" = "$prop Percentiles$note"
+                        "yOffset" = 1
+                        "xOffset" = 1
+                        "chartType" = 75
+                        "seriesSettings" = @{
+                            1 = @{
+                                "color" = $BLUES[1]
+                            }
+                        }
+                        "axisSettings" = @{
+                            1 = @{
+                                "max" = 100
+                                "title" = "Percentiles"
+                                "minorGridlines" = $true
+                            }
+                            2 = @{
+                                "title" = $meta.units[$prop]
+                                "logarithmic" = $true
+                                #"min" = 10
+                            }
+                        }
                     }
                 }
-                "meta" = @{
-                    "columnFormats" = @($meta.format.$prop)
-                }
-                "data" = @{
-                    $TableTitle = @{
-                        $prop = @{
+                if ($meta.comparison) {
+                    $table.cols.$TableTitle.$prop = @{
+                        "baseline" = 0
+                        "% change" = 1
+                        "test" = 2
+                    }
+                    $table.data.$TableTitle.$prop = @{
+                        "baseline" = @{
+                            "percentiles" = @{}
+                        }
+                        "% change" = @{
+                            "percentiles" = @{}
+                        }
+                        "test" = @{
                             "percentiles" = @{}
                         }
                     }
+                    $table.chartSettings.seriesSettings[2] = @{
+                        "delete" = $true
+                    }
+                    $table.chartSettings.seriesSettings[3] = @{
+                        "color" = $ORANGES[1]
+                    }
+                    $table.meta.columnFormats = @($meta.format.$prop, $meta.format."% change", $meta.format.$prop)
                 }
-                "chartSettings"= @{
-                    "title" = "$prop Percentiles$note"
-                    "yOffset" = 1
-                    "xOffset" = 1
-                    "chartType" = 75
-                    "seriesSettings" = @{
-                        1 = @{
-                            "color" = $BLUES[1]
+                $row = 0
+                # Add row labels and fill data in table
+                ForEach ($percentile in $data.$prop.$sortKey.baseline.percentiles.Keys | Sort) {
+                    $table.rows.percentiles.$percentile = $row
+                    if ($meta.comparison) {
+                        $percentage = $data.$prop.$sortKey."% change".percentiles.$percentile
+                        $percentage = "$percentage %"
+                        $table.data.$TableTitle.$prop.baseline.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.baseline.percentiles.$percentile}
+                        $table.data.$TableTitle.$prop."% change".percentiles.$percentile = @{"value" = $percentage}
+                        $table.data.$TableTitle.$prop.test.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.test.percentiles.$percentile}
+                        $params = @{
+                            "cell" = $table.data.$TableTitle.$prop."% change".percentiles.$percentile
+                            "value" = $data.$prop.$sortKey.test.percentiles.$percentile
+                            "target" = $data.$prop.$sortKey.baseline.percentiles.$percentile
+                            "goal" = $meta.goal.$prop
                         }
+                        $table.data.$TableTitle.$prop."% change".percentiles.$percentile = Select-Color @params
+                    } else {
+                        $table.data.$TableTitle.$prop.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.baseline.percentiles.$percentile}
                     }
-                    "axisSettings" = @{
-                        1 = @{
-                            "max" = 100
-                            "title" = "Percentiles"
-                            "minorGridlines" = $true
-                        }
-                        2 = @{
-                            "title" = $meta.units[$prop]
-                            "logarithmic" = $true
-                            #"min" = 10
-                        }
-                    }
-                }
-            }
-            if ($meta.comparison) {
-                $table.cols.$TableTitle.$prop = @{
-                    "baseline" = 0
-                    "% change" = 1
-                    "test" = 2
-                }
-                $table.data.$TableTitle.$prop = @{
-                    "baseline" = @{
-                        "percentiles" = @{}
-                    }
-                    "% change" = @{
-                        "percentiles" = @{}
-                    }
-                    "test" = @{
-                        "percentiles" = @{}
-                    }
-                }
-                $table.chartSettings.seriesSettings[2] = @{
-                    "delete" = $true
-                }
-                $table.chartSettings.seriesSettings[3] = @{
-                    "color" = $ORANGES[1]
-                }
-                $table.meta.columnFormats = @($meta.format.$prop, $meta.format."% change", $meta.format.$prop)
-            }
-            $row = 0
-            # Add row labels and fill data in table
-            ForEach ($percentile in $data.$prop.$sortKey.baseline.percentiles.Keys | Sort) {
-                $table.rows.percentiles.$percentile = $row
-                if ($meta.comparison) {
-                    $percentage = $data.$prop.$sortKey."% change".percentiles.$percentile
-                    $percentage = "$percentage %"
-                    $table.data.$TableTitle.$prop.baseline.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.baseline.percentiles.$percentile}
-                    $table.data.$TableTitle.$prop."% change".percentiles.$percentile = @{"value" = $percentage}
-                    $table.data.$TableTitle.$prop.test.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.test.percentiles.$percentile}
-                    $params = @{
-                        "cell" = $table.data.$TableTitle.$prop."% change".percentiles.$percentile
-                        "value" = $data.$prop.$sortKey.test.percentiles.$percentile
-                        "target" = $data.$prop.$sortKey.baseline.percentiles.$percentile
-                        "goal" = $meta.goal.$prop
-                    }
-                    $table.data.$TableTitle.$prop."% change".percentiles.$percentile = Select-Color @params
-                } else {
-                    $table.data.$TableTitle.$prop.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.baseline.percentiles.$percentile}
-                }
-                $row += 1
+                    $row += 1
                 
+                }
+                $table.meta.dataWidth = Get-TreeWidth $table.cols
+                $table.meta.colLabelDepth = Get-TreeDepth $table.cols
+                $table.meta.dataHeight = Get-TreeWidth $table.rows
+                $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+                $tables = $tables + $table
             }
-            $table.meta.dataWidth = Get-TreeWidth $table.cols
-            $table.meta.colLabelDepth = Get-TreeDepth $table.cols
-            $table.meta.dataHeight = Get-TreeWidth $table.rows
-            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-            $tables = $tables + $table
         }
+        return $tables  
+    } catch {
+        Write-Warning "Error at Format-Percentiles"
+        Write-Error $_.Exception.Message
     }
-    return $tables  
 }
 
 Function Format-Distribution {
@@ -1081,106 +1097,125 @@ Function Format-Distribution {
 
         [Parameter()] [String] $Prop = "latency",
     
-        [Parameter()] [Int] $NumSegments = 100
+        [Parameter()] [Int] $SubSampleRate = 50
     )
+    try {
+        $meta = $DataObj.meta
+        $modes = @("baseline")
+        if ($meta.comparison) {
+            $modes += "test"
+        }
+        $tables = @()
+        $originalTitle = $TableTitle
+        ForEach ($mode in $modes) {
+            if ($tables.Count -gt 0) {
+                $tables += "NEW"
+            }
+            $label = ""
+            if ($modes.Count -gt 1) {
+                $label = "$mode -"
+                $TableTitle = "$label$originalTitle"
+            }
+            $data = $dataObj.rawData.$mode
+            $timeSamples = $data[0][$Prop].Count
+            $table = @{
+                "meta" = @{}
+                "rows" = @{
+                    "Data Point" = @{}
+                }
+                "cols" = @{
+                    $TableTitle = @{
+                        "Time Segment" = 0
+                        $Prop = 1
+                    }
+                }
+                "data" = @{
+                    $TableTitle = @{
+                        "Time Segment" = @{
+                            "Data Point" = @{}
+                        }
+                        "latency" = @{
+                            "Data Point" = @{}
+                        }
+                    }
+                }
+                "chartSettings" = @{
+                    "chartType" = -4169
+                    "yOffset" = 2
+                    "xOffset" = 2
+                    "title" = "$label Temporal Latency Distribution"
+                    "axisSettings" = @{
+                        1 = @{
+                            "title" = "Time Series"
+                            "max" = $timeSamples
+                            "minorGridlines" = $true
+                            "majorGridlines" = $true
+                        }
+                        2 = @{
+                            "title" = "us"
+                            "logarithmic" = $true
+                            "min" = 10
+                        }
+                    }
+                }
+            }
 
-    $meta = $DataObj.meta
-    $modes = @("baseline")
-    if ($meta.comparison) {
-        $modes += "test"
+            # Add row labels and fill data in table
+            $i = 0
+            $row = 0
+            $NumSegments = $data[0].$Prop.Count / $SubSampleRate
+            while ($i -lt $NumSegments) {
+                [Array]$segmentData = @()
+                ForEach ($entry in $data) {
+                    $segmentData += $entry[$Prop][($i * $SubSampleRate) .. ((($i + 1) * $SubSampleRate) - 1)]
+                }
+                $segmentData = $segmentData | Sort
+                $time = $i * $subSampleRate
+                if ($segmentData.Count -ge 10) {
+                    $table.rows."Data Point".$row = $row
+                    $table.rows."Data Point".($row + 1) = $row + 1
+                    $table.rows."Data Point".($row + 2) = $row + 2
+                    $table.rows."Data Point".($row + 3) = $row + 3
+                    $table.rows."Data Point".($row + 4) = $row + 4
+                    $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
+                    $table.data.$TableTitle."Time Segment"."Data Point".($row + 1) = @{"value" = $time}
+                    $table.data.$TableTitle."Time Segment"."Data Point".($row + 2) = @{"value" = $time}
+                    $table.data.$TableTitle."Time Segment"."Data Point".($row + 3) = @{"value" = $time}
+                    $table.data.$TableTitle."Time Segment"."Data Point".($row + 4) = @{"value" = $time}
+                    $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $segmentData[0]}
+                    $table.data.$TableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[[int]($segmentData.Count / 4)]}
+                    $table.data.$TableTitle.$Prop."Data Point".($row + 2) = @{"value" = $segmentData[[int]($segmentData.Count / 2)]}
+                    $table.data.$TableTitle.$Prop."Data Point".($row + 3) = @{"value" = $segmentData[[int]((3 * $segmentData.Count) / 4)]}
+                    $table.data.$TableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
+                    $row += 5
+                } elseif ($segmentData.Count -ge 2) {
+                    $table.rows."Data Point".$row = $row
+                    $table.rows."Data Point".($row + 1) = $row + 1
+                    $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
+                    $table.data.$TableTitle."Time Segment"."Data Point".($row + 1) = @{"value" = $time}
+                    $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $segmentData[0]}
+                    $table.data.$TableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[-1]}
+                    $row += 2
+                } else {
+                    $table.rows."Data Point".$row = $row
+                    $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
+                    $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $segmentData[0]}
+                    $row += 1
+                }
+                $i += 1
+            }
+            $table.meta.dataWidth = Get-TreeWidth $table.cols
+            $table.meta.colLabelDepth = Get-TreeDepth $table.cols
+            $table.meta.dataHeight = Get-TreeWidth $table.rows
+            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+
+            $tables += $table
+        }
+        return $tables
+    } catch {
+        Write-Warning "Error at Format-Distribution"
+        Write-Error $_.Exception.Message
     }
-    $tables = @()
-    $originalTitle = $TableTitle
-    ForEach ($mode in $modes) {
-        if ($tables.Count -gt 0) {
-            $tables += "NEW"
-        }
-        $label = ""
-        if ($modes.Count -gt 1) {
-            $label = "$mode -"
-            $TableTitle = "$label$originalTitle"
-        }
-        $data = $dataObj.rawData.$mode
-        $timeSamples = $data[0][$Prop].Count
-        $table = @{
-            "meta" = @{}
-            "rows" = @{
-                "Data Point" = @{}
-            }
-            "cols" = @{
-                $TableTitle = @{
-                    "Time Segment" = 0
-                    $Prop = 1
-                }
-            }
-            "data" = @{
-                $TableTitle = @{
-                    "Time Segment" = @{
-                        "Data Point" = @{}
-                    }
-                    "latency" = @{
-                        "Data Point" = @{}
-                    }
-                }
-            }
-            "chartSettings" = @{
-                "chartType" = -4169
-                "yOffset" = 2
-                "xOffset" = 2
-                "title" = "$label Temporal Latency Distribution"
-                "axisSettings" = @{
-                    1 = @{
-                        "title" = "Time Series"
-                        "max" = $timeSamples
-                        "minorGridlines" = $true
-                        "majorGridlines" = $true
-                    }
-                    2 = @{
-                        "title" = "us"
-                        "logarithmic" = $true
-                        "min" = 10
-                    }
-                }
-            }
-        }
-
-        # Add row labels and fill data in table
-        $segmentSize = [int]($timeSamples / $NumSegments)
-        $i = 0
-        $row = 0
-        while ($i -lt $NumSegments) {
-            [Array]$segmentData = @()
-            ForEach ($entry in $data) {
-                $segmentData += $entry[$Prop][($i * $segmentSize) .. ((($i + 1) * $segmentSize) - 1)]
-            }
-            $segmentData = $segmentData | Sort
-            $time = $i * $segmentSize
-            $table.rows."Data Point".$row = $row
-            $table.rows."Data Point".($row + 1) = $row + 1
-            $table.rows."Data Point".($row + 2) = $row + 2
-            $table.rows."Data Point".($row + 3) = $row + 3
-            $table.rows."Data Point".($row + 4) = $row + 4
-            $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
-            $table.data.$TableTitle."Time Segment"."Data Point".($row + 1) = @{"value" = $time}
-            $table.data.$TableTitle."Time Segment"."Data Point".($row + 2) = @{"value" = $time}
-            $table.data.$TableTitle."Time Segment"."Data Point".($row + 3) = @{"value" = $time}
-            $table.data.$TableTitle."Time Segment"."Data Point".($row + 4) = @{"value" = $time}
-            $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $segmentData[0]}
-            $table.data.$TableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[[int]($segmentData.Count / 4)]}
-            $table.data.$TableTitle.$Prop."Data Point".($row + 2) = @{"value" = $segmentData[[int]($segmentData.Count / 2)]}
-            $table.data.$TableTitle.$Prop."Data Point".($row + 3) = @{"value" = $segmentData[[int]((3 * $segmentData.Count) / 4)]}
-            $table.data.$TableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
-            $row += 5
-            $i += 1
-        }
-        $table.meta.dataWidth = Get-TreeWidth $table.cols
-        $table.meta.colLabelDepth = Get-TreeDepth $table.cols
-        $table.meta.dataHeight = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-
-        $tables += $table
-    }
-    return $tables
 }
 
 # Selects the color of a cell, indicating whether a value
