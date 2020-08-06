@@ -1,4 +1,3 @@
-﻿
 Set-ExecutionPolicy -ExecutionPolicy  ByPass
 
 # Interface ---------------------------------------------------------------------------------------
@@ -1618,4 +1617,3 @@ Function Fill-Data ($Worksheet, $Data, $Cols, $Rows, $StartCol, $StartRow) {
             Fill-Data -Worksheet $Worksheet -Data $Data[$label] -Cols $Cols -Rows $Rows[$label] -StartCol $StartCol -StartRow $StartRow
         }
     }
-}
