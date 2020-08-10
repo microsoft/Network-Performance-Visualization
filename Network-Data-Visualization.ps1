@@ -1,8 +1,19 @@
 Set-ExecutionPolicy -ExecutionPolicy  ByPass
 
+$MBTOGB = 1 / 1024
+$BTOGB = 1 / (1024 * 1024 * 1024) 
+
+$LIGHTGREEN = 10416289
+$GREEN = 1268766
+$LIGHTRED = 10396159
+$RED = 2108032
+$BLUES = @(10249511, 14058822, 16758932)
+$ORANGES = @(294092, 1681916, 6014716)
+
 # Interface ---------------------------------------------------------------------------------------
 
-Function Network-Data-Visualization {
+Function Network-Data-Visualization 
+{
     <#
     .Description
     This cmdlet parses, processes, and visualizes network performance data files produced by one of various 
@@ -58,41 +69,49 @@ Function Network-Data-Visualization {
 
         [Parameter()]
         [string]$SavePath = "$home\Documents\PSreports"
-
-        
     )
+    
+    $ErrorActionPreference = "Stop"
+    
     $tool = ""
-    # Parse files into raw data
-    if ($NTTTCP) {
+    if ($NTTTCP) 
+    {
         $tool = "NTTTCP"
-
-    } elseif ($LATTE) {
+    } 
+    elseif ($LATTE) 
+    {
         $tool = "LATTE"
 
-    } elseif ($CTStraffic) {
+    } 
+    elseif ($CTStraffic) 
+    {
         $tool = "CTStraffic"
     }
 
     $baselineRaw = Parse-Files -Tool $tool -DirName $BaselineDir
     $testRaw = $null
-    if ($TestDir) {
+    if ($TestDir) 
+    {
         $testRaw = Parse-Files -Tool $tool -DirName $TestDir
     } 
 
     $processedData = Process-Data -BaselineDataObj $baselineRaw -TestDataObj $testRaw
 
     [Array] $tables = @() 
-    if (@("NTTTCP", "CTStraffic") -Contains $tool) {
+    if (@("NTTTCP", "CTStraffic") -contains $tool) 
+    {
         $tables += Format-RawData -DataObj $processedData -TableTitle $tool
         $tables += "NEW"
-        $tables += Format-AnalyzedData -DataObj $processedData -TableTitle $tool -Metrics @("min", "mean", "max", "std dev")
+        $tables += Format-Stats -DataObj $processedData -TableTitle $tool -Metrics @("min", "mean", "max", "std dev")
         $tables += Format-Quartiles -DataObj $processedData -TableTitle $tool
         $tables += Format-MinMaxChart -DataObj $processedData -TableTitle $tool
         $tables += "NEW" 
-    } elseif (@("LATTE") -Contains $tool ) {
+    } 
+    elseif (@("LATTE") -contains $tool ) 
+    {
         $tables += Format-Distribution -DataObj $processedData -TableTitle $tool -SubSampleRate 50
         $tables += "NEW"
-        $tables += Format-AnalyzedData -DataObj $processedData -TableTitle $tool
+        $tables += Format-Stats -DataObj $processedData -TableTitle $tool
     }
 
     $tables += Format-Percentiles -DataObj $processedData -TableTitle $tool
@@ -103,32 +122,60 @@ Function Network-Data-Visualization {
 
 # File Parsing ------------------------------------------------------------------------------------
 
-Function Parse-Files {
+
+##
+# Parse-Files
+# -----------
+# This function iterates through the files of a specified directory, parsing each file and 
+# exctracting relevant data from each file. Data is then packaged into an array of objects,
+# one object per file, and returned along with some meta data.
+#
+# Parameters
+# ----------
+# DirName (String) - Path to the directory whose files are to be parsed
+# Tool (String) - Name of the tool whose data is being parsed (NTTTCP, LATTE, CTStraffic, etc.)
+#
+# Return
+# ------
+# HashTable - Object containing an array of dataEntry objects and meta data
+#
+##
+Function Parse-Files 
+{
     param (
         [Parameter(Mandatory=$true)] [string]$DirName, 
         [Parameter()] [string] $Tool
     )
 
-    try {
+    try
+    {
         $files = Get-ChildItem $DirName
-    } catch {
-        Write-Warning "Failed to open directory at path: $DirName"
+    } 
+    catch
+    {
+        Write-Warning "Error at Parse-Files: failed to open directory at path: $DirName"
         Write-Error $_.Exception.Message
     }
 
-    if ($Tool -eq "NTTTCP") {
+    if ($Tool -eq "NTTTCP") 
+    {
         [Array] $dataEntries = @()
-        ForEach ($file in $files) {
+        foreach ($file in $files) 
+        {
             $fileName = $file.FullName
-            try {
-                $ErrorActionPreference = "Stop"
+            try 
+            {
                 $dataEntry = Parse-NTTTCP -FileName $fileName
-            } catch {
+            } 
+            catch 
+            {
                 Write-Warning "Error at Parse-NTTTCP: failed to parse file $fileName"
                 Write-Error $_.Exception.Message
             }
+
             $dataEntries += ,$dataEntry
         }
+
         $rawData = @{
             "meta" = @{
                 "units" = @{
@@ -149,19 +196,25 @@ Function Parse-Files {
             }
             "data" = $dataEntries
         }
-        return $rawData
 
-    } elseif ($Tool -eq "LATTE") {
+        return $rawData
+    } 
+    elseif ($Tool -eq "LATTE") 
+    {
         [Array] $dataEntries = @() 
-        ForEach ($file in $files) {
+        foreach ($file in $files) 
+        {
             $fileName = $file.FullName
-            try {
-                $ErrorActionPreference = "Stop"
+            try 
+            {
                 $dataEntry = Parse-LATTE -FileName $fileName
-            } catch {
+            } 
+            catch 
+            {
                 Write-Warning "Error at Parse-LATTE: failed to parse file $fileName"
                 Write-Error $_.Exception.Message
             }
+
             $dataEntries += ,$dataEntry
         }
 
@@ -181,20 +234,29 @@ Function Parse-Files {
             }
             "data" = $dataEntries
         }
+
         return $rawData
-    } elseif ($Tool -eq "CTStraffic") {
+    }
+    elseif ($Tool -eq "CTStraffic") 
+    {
         [Array] $dataEntries = @() 
-        ForEach ($file in $files) {
+        foreach ($file in $files) 
+        {
             $fileName = $file.FullName
-            try {
+            try 
+            {
                 $ErrorActionPreference = "Stop"
                 $dataEntry = Parse-CTStraffic -FileName $fileName
-            } catch {
+            } 
+            catch 
+            {
                 Write-Warning "Error at Parse-CTStraffic: failed to parse file $fileName"
                 Write-Error $_.Exception.Message
             }
+
             $dataEntries += ,$dataEntry
         }
+
         $rawData = @{
             "meta" = @{
                 "units" = @{
@@ -212,14 +274,33 @@ Function Parse-Files {
             }
             "data" = [Array]$dataEntries
         }
+
         return $rawData
     }
 }
 
-Function Parse-NTTTCP ([string] $FileName) {
+
+##
+# Parse-NTTTCP
+# ------------
+# This function parses a single file containing NTTTCP data in an XML format. Relevant data
+# is then extracted, packaged into a dataEntry object, and returned.
+#
+# Parameters
+# ----------
+# Filename (String) - Path of file to be parsed
+#
+# Return
+# ------
+# HashTable - Object containing extracted data
+#
+## 
+Function Parse-NTTTCP ([string] $FileName) 
+{
     [XML]$file = Get-Content $FileName
+
     [decimal] $cycles = $file.ChildNodes.cycles.'#text'
-    [decimal] $throughput = .008 * [decimal]$file.ChildNodes.throughput[0].'#text'
+    [decimal] $throughput = $MBTOGB * [decimal]$file.ChildNodes.throughput[0].'#text'
     [int] $sessions = $file.ChildNodes.parameters.max_active_threads
 
     $dataEntry = @{
@@ -232,26 +313,52 @@ Function Parse-NTTTCP ([string] $FileName) {
     return $dataEntry
 }
 
-Function Parse-CTStraffic ([string] $FileName) {
-    $file = Get-Content $FileName
+
+##
+# Parse-CTStraffic
+# ----------------
+# This function parses a single file containing CTStraffic data in an CSV format. 
+# Relevant data is then extracted, packaged into a dataEntry object, and returned.
+#
+# Parameters
+# ----------
+# Filename (String) - Path of file to be parsed
+#
+# Return
+# ------
+# HashTable - Object containing extracted data
+#
+##
+Function Parse-CTStraffic ([string] $Filename) 
+{
+    $file = Get-Content $Filename
+
     $firstLine = $true
     $idxs = @{}
     [Array] $throughputs = @()
     [Array] $sessions = @()
-    ForEach ($line in $file) {
-        if ($firstLine) {
+
+    foreach ($line in $file) 
+    {
+        if ($firstLine) 
+        {
             $firstLine = $false
             $splitLine = $line.Split(',')
-            $i = 0
-            ForEach($token in $splitLine) {
-                if (@("SendBps", "In-Flight") -Contains $token) {
-                    $idxs[$token] = $i
+            $col = 0
+            foreach($token in $splitLine) 
+            {
+                if (@("SendBps", "In-Flight") -contains $token) 
+                {
+                    $idxs[$token] = $col
                 }
-                $i++
+                $col++
             }
-        } else {
+        } 
+        else 
+        {
             $splitLine = $line.Split(',')
-            $throughputs += (0.000000008 * [decimal]$splitLine[$idxs["SendBps"]])
+
+            $throughputs += ($BTOGB * [decimal]$splitLine[$idxs["SendBps"]])
             $sessions += $splitLine[$idxs["In-Flight"]]
         }
     }
@@ -259,30 +366,67 @@ Function Parse-CTStraffic ([string] $FileName) {
     $dataEntry = @{
         "sessions" = [int]($sessions | Measure -Maximum).Maximum
         "throughput" = [decimal]($throughputs | Measure -Average).Average
-        "filename" = $FileName.Split('\')[-1] 
+        "filename" = $Filename.Split('\')[-1] 
     }
+
     return $dataEntry
 }
 
-Function Parse-LATTE ([string] $FileName) {
-    $latency = @()
+
+##
+# Parse-LATTE
+# -----------
+# This function parses a single file containing LATTE data. Each line containing
+# a latency sample is then extracted into an array, packaged into a dataEntry 
+# object, and returned.
+#
+# Parameters
+# ----------
+# Filename (String) - Path of file to be parsed
+#
+# Return
+# ------
+# HashTable - Object containing extracted data
+#
+##
+Function Parse-LATTE ([string] $FileName) 
+{
     $file = Get-Content $FileName
-    $i = 0
-    Foreach ($line in $file) {
-        [Array] $latency += ,[int]$line
-        
+
+    [Array] $latency = @()
+    foreach ($line in $file) 
+    {
+        $latency += ,[int]$line
     }
+
     $dataEntry = @{
         "latency" = $latency
         "filename" = $FileName.Split('\')[-1]
     }
+
     return $dataEntry
 }
 
+
+
 # Data Processing --------------------------------------------------------------------
 
-# This function processes raw data objects, organizing data by property and sortProp value and 
-# calculating statistics over organized data.
+##
+# Process-Data
+# ------------
+# This function organizes raw data by property and sortProp (if applicable), 
+# and then calculates statistics and percentiles over each sub-category of data. Processed data, 
+# the original raw data, and some meta data are then stored together in an object and returned. 
+#
+# Parameters
+# ----------
+# BaselineDataObj (HashTable) - Object containing baseline raw data
+# TestDataObj (HashTable) - Object containing test raw data (optional) 
+#
+# Return 
+# ------
+# HashTable - Object containing processed data, raw data, and meta data
+##
 Function Process-Data {
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $BaselineDataObj,
@@ -302,20 +446,20 @@ Function Process-Data {
         }
 
         $sortProp = $BaselineDataObj.meta.sortProp
-        ForEach ($prop in ([Array]$BaselineDataObj.data)[0].Keys) {
-            if (($prop -eq $BaselineDataObj.meta.sortProp) -or ($BaselineDataObj.meta.noTable -Contains $prop)) {
+        foreach ($prop in ([Array]$BaselineDataObj.data)[0].Keys) {
+            if (($prop -eq $BaselineDataObj.meta.sortProp) -or ($BaselineDataObj.meta.noTable -contains $prop)) {
                 continue
             }
 
             # Organize baseline data by sortProp values
             $processedDataObj.data.$prop = @{}
             $modes = @("baseline")
-            ForEach($item in $BaselineDataObj.data) {
+            foreach($item in $BaselineDataObj.data) {
                 $sortKey = "allData"
                 if ($sortProp) {
                     $sortKey = $item.$sortProp 
                 } 
-                if (-Not ($processedDataObj.data.$prop.Keys -Contains $sortKey)) {
+                if (-not ($processedDataObj.data.$prop.Keys -contains $sortKey)) {
                     $processedDataObj.data.$prop.$sortKey = @{
                         "baseline" = @{
                             "orderedData" = @()
@@ -328,12 +472,12 @@ Function Process-Data {
             # Organize test data by sortProp values, if test data is provided
             if ($TestDataObj) {
                 $modes += "test"
-                ForEach ($item in $TestDataObj.data) {
+                foreach ($item in $TestDataObj.data) {
                     $sortKey = "allData"
                     if ($sortProp) {
                         $sortKey = $item.$sortProp 
                     }
-                    if (-Not ($processedDataObj.data.$prop.$sortKey.Keys -Contains "test")) {
+                    if (-not ($processedDataObj.data.$prop.$sortKey.Keys -contains "test")) {
                         $processedDataObj.data.$prop.$sortKey.test = @{
                             "orderedData" = @()
                         }
@@ -344,15 +488,15 @@ Function Process-Data {
             }
 
             # Calculate stats and percentiles for each sortKey, calculate % change if necessary
-            ForEach ($sortKey in $processedDataObj.data.$prop.Keys) {
+            foreach ($sortKey in $processedDataObj.data.$prop.Keys) {
                 $percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
                                          99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
-                ForEach ($mode in $modes) {
+                foreach ($mode in $modes) {
                     $processedDataObj.data.$prop.$sortKey.$mode.orderedData = $processedDataObj.data.$prop.$sortKey.$mode.orderedData | Sort
                     $stats = Calculate-Stats -arr $processedDataObj.data.$prop.$sortKey.$mode.orderedData
                     $processedDataObj.data.$prop.$sortKey.$mode.stats = $stats
                     $processedDataObj.data.$prop.$sortKey.$mode.percentiles = @{}
-                    ForEach ($percentile in $percentiles) {
+                    foreach ($percentile in $percentiles) {
                         $idx = [int] (($percentile / 100) * ($processedDataObj.data.$prop.$sortKey.$mode.orderedData.Count - 1))
                         $value = $processedDataObj.data.$prop.$sortKey.$mode.orderedData[$idx]
                         $processedDataObj.data.$prop.$sortKey.$mode.percentiles.$percentile = $value
@@ -360,13 +504,13 @@ Function Process-Data {
                 } 
                 if ($TestDataObj) {
                     $processedDataObj.data.$prop.$sortKey."% change".stats = @{}
-                    ForEach ($metric in $processedDataObj.data.$prop.$sortKey.$mode.stats.Keys) {
+                    foreach ($metric in $processedDataObj.data.$prop.$sortKey.$mode.stats.Keys) {
                         $diff = $processedDataObj.data.$prop.$sortKey."test".stats.$metric - $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric
                         $percentChange = 100 * ($diff / [math]::Abs( $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric))
                         $processedDataObj.data.$prop.$sortKey."% change".stats.$metric = $percentChange
                     }
                     $processedDataObj.data.$prop.$sortKey."% change".percentiles = @{}
-                    ForEach ($percentile in $percentiles) {
+                    foreach ($percentile in $percentiles) {
                         $percentChange = 100 * (($processedDataObj.data.$prop.$sortKey."test".percentiles.$percentile / $processedDataObj.data.$prop.$sortKey."baseline".percentiles.$percentile) - 1)
                         $processedDataObj.data.$prop.$sortKey."% change".percentiles.$percentile = $percentChange
                     }
@@ -382,15 +526,23 @@ Function Process-Data {
  
 # Table Formatting -------------------------------------------------------------------
 
-$LIGHTGREEN = 10416289
-$GREEN = 1268766
-$LIGHTRED = 10396159
-$RED = 2108032
-$BLUES = @(10249511, 14058822, 16758932)
-$ORANGES = @(294092, 1681916, 6014716)
 
+##
+# Format-RawData
+# --------------
 # This function formats raw data into tables, one for each dataEntry property. Data samples are
 # organized by their sortProp and labeled with the name of the file from which the data sample was extracted.
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Object containing processed data, raw data, and meta data
+# TableTitle (String) - Title to be displayed at the top of each table
+# 
+# Return
+# ------
+# HashTable[] - Array of HashTable objects which each store a table of formatted raw data
+#
+##
 Function Format-RawData {
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
@@ -456,7 +608,7 @@ Function Format-RawData {
         # Fill single array with all data and sort, label data as baseline/test if necessary
         [Array] $data = @()
         $baseData = $DataObj.rawData.baseline
-        ForEach ($entry in $baseData) {
+        foreach ($entry in $baseData) {
             if ($meta.comparison) {
                 $entry.baseline = $true
             }
@@ -465,13 +617,14 @@ Function Format-RawData {
 
         if ($meta.comparison) {
             $testData = $DataObj.rawData.test
-            ForEach ($entry in $testData) {
+            foreach ($entry in $testData) {
                 $data += $entry
             }
         }
 
         $data = Sort-ByProp -Data $data -Prop $sortProp
-        ForEach ($prop in $dataObj.data.Keys) {
+
+        foreach ($prop in $dataObj.data.Keys) {
             $table = @{
                 "rows" = @{
                     $prop = @{}
@@ -488,11 +641,11 @@ Function Format-RawData {
             }
             $col = 0
             $row = 0
-            ForEach ($entry in $data){
+            foreach ($entry in $data){
                 $sortKey = $entry.$sortProp
 
                 # Add column labels to table
-                if (-Not ($table.cols.$TableTitle.Keys -contains $sortKey)) {
+                if (-not ($table.cols.$TableTitle.Keys -contains $sortKey)) {
                     if ($meta.comparison) {
                         $table.cols.$TableTitle.$sortKey = @{
                             "baseline" = $col
@@ -533,10 +686,10 @@ Function Format-RawData {
                             "value" = $entry.$prop
                         }
                         $params = @{
-                            "cell" = $table.data.$TableTitle.$sortKey.test.$prop.$filename
-                            "value" = $entry.$prop
-                            "target" = $DataObj.data.$prop.$sortKey.baseline.stats.mean
-                            "goal" = $meta.goal.$prop
+                            "Cell" = $table.data.$TableTitle.$sortKey.test.$prop.$filename
+                            "TestVal" = $entry.$prop
+                            "BaseVal" = $DataObj.data.$prop.$sortKey.baseline.stats.mean
+                            "Goal" = $meta.goal.$prop
                         }
                         $table.data.$TableTitle.$sortKey.test.$prop.$filename = Select-Color @params
                     }
@@ -553,7 +706,7 @@ Function Format-RawData {
             $tables = $tables + $table
         }
 
-        ForEach ($entry in $data) {
+        foreach ($entry in $data) {
             if ($entry.baseline) {
                 $entry.Remove("baseline")
             }
@@ -565,11 +718,29 @@ Function Format-RawData {
     }
 }
 
-# This function formats stats metrics (mine, mean, max, etc) into a table. When run in comparison 
-# mode, the table also displays % change and is color-coded to indicate improvement/regression.
-Function Format-AnalyzedData {
+
+##
+# Format-Stats
+# -------------------
+# This function formats statistical metrics (min, mean, max, etc) into a table, one per property.
+# When run in comparison mode, the table also displays % change and is color-coded to indicate 
+# improvement/regression.
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Object containing processed data, raw data, and meta data
+# TableTitle (String) - Title to be displayed at the top of each table
+# Metrics (String[]) - Array containing statistical metrics that should be displayed on generated 
+#                      tables. All metrics are displayed if this parameter is null. 
+#
+# Return
+# ------
+# HashTable[] - Array of HashTable objects which each store a table of formatted statistical data
+#
+##
+Function Format-Stats {
     Param (
-        [Parameter(Mandatory=$true)] [PSobject[]] $dataObj,
+        [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
         [Parameter()] [String] $TableTitle = "",
 
@@ -578,9 +749,9 @@ Function Format-AnalyzedData {
     
     try {
         $tables = @()
-        $data = $dataObj.data
-        $meta = $dataObj.meta
-        ForEach ($prop in $data.keys) { 
+        $data = $DataObj.data
+        $meta = $DataObj.meta
+        foreach ($prop in $data.keys) { 
             $table = @{
                 "rows" = @{
                     $prop = @{}
@@ -597,10 +768,10 @@ Function Format-AnalyzedData {
             }
             $col = 0
             $row = 0
-            ForEach ($sortKey in $data.$prop.Keys | Sort) { 
+            foreach ($sortKey in $data.$prop.Keys | Sort) { 
 
                 # Add column labels to table
-                if (-Not $meta.comparison) {
+                if (-not $meta.comparison) {
                     $table.cols.$TableTitle.$sortKey = $col
                     $table.meta.columnFormats += $meta.format.$prop 
                     $table.data.$TableTitle.$sortKey = @{
@@ -630,17 +801,17 @@ Function Format-AnalyzedData {
                     }
                 }
 
-                if (-Not $Metrics) {
+                if (-not $Metrics) {
                     $Metrics = ($data.$prop.$sortKey.baseline.stats.Keys | Sort)
                 }
 
                 # Add row labels and fill data in table
-                ForEach ($metric in $Metrics) {
-                    if (-Not ($table.rows.$prop.Keys -Contains $metric)) {
+                foreach ($metric in $Metrics) {
+                    if (-not ($table.rows.$prop.Keys -contains $metric)) {
                         $table.rows.$prop.$metric = $row
                         $row += 1
                     }
-                    if (-Not $meta.comparison) {
+                    if (-not $meta.comparison) {
                         $table.data.$TableTitle.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
                     } else {
                         $table.data.$TableTitle.$sortKey.baseline.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
@@ -649,15 +820,15 @@ Function Format-AnalyzedData {
                         $percentChange = $data.$prop.$sortKey."% change".stats.$metric
                         $table.data.$TableTitle.$sortKey."% change".$prop.$metric = @{"value" = "$percentChange %"}
                         $params = @{
-                            "cell" = $table.data.$TableTitle.$sortKey."% change".$prop.$metric
-                            "value" = $data.$prop.$sortKey.test.stats.$metric
-                            "target" = $data.$prop.$sortKey.baseline.stats.$metric
-                            "goal" = $meta.goal.$prop
+                            "Cell" = $table.data.$TableTitle.$sortKey."% change".$prop.$metric
+                            "TestVal" = $data.$prop.$sortKey.test.stats.$metric
+                            "BaseVal" = $data.$prop.$sortKey.baseline.stats.$metric
+                            "Goal" = $meta.goal.$prop
                         }
-                        if (@("std dev", "variance", "kurtosis", "std err", "range") -Contains $metric) {
+                        if (@("std dev", "variance", "kurtosis", "std err", "range") -contains $metric) {
                             $params.goal = "decrease"
                             $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
-                        } elseif ( -Not (@("sum", "count") -contains $metric)) {
+                        } elseif ( -not (@("sum", "count") -contains $metric)) {
                             $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
                         }
                     }
@@ -672,13 +843,28 @@ Function Format-AnalyzedData {
         }
         return $tables
     } catch {
-        Write-Warning "Error at Format-AnalyzedData"
+        Write-Warning "Error at Format-Stats"
         Write-Error $_.Exception.Message
     }
 }
 
-# This function formats the quartiles of each data range and creates a stacked bar chart
-# to visualize the the distribution of values on a coarse level
+
+##
+# Format-Quartiles
+# ----------------
+# This function formats a table in order to create a chart that displays the quartiles
+# of each data subcategory (organized by sortProp), one chart per property.
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Object containing processed data, raw data, and meta data
+# TableTitle (String) - Title to be displayed at the top of each table
+#
+# Return
+# ------
+# HashTable[] - Array of HashTable objects which each store a table of formatted quartile data
+#
+##
 Function Format-Quartiles {
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
@@ -690,7 +876,7 @@ Function Format-Quartiles {
         $data = $DataObj.data
         $meta = $DataObj.meta
         $sortProp = $meta.sortProp
-        ForEach ($prop in $data.Keys) { 
+        foreach ($prop in $data.Keys) { 
             $format = $meta.format.$prop
             $table = @{
                 "rows" = @{
@@ -767,8 +953,8 @@ Function Format-Quartiles {
         
             $row = 0
             # Add row labels and fill data in table
-            ForEach ($sortKey in $data.$prop.Keys | Sort) {
-                if (-Not $meta.comparison){
+            foreach ($sortKey in $data.$prop.Keys | Sort) {
+                if (-not $meta.comparison){
                     $table.rows.$prop.$sortProp.$sortKey = $row
                     $row += 1
                     $table.data.$TableTitle.min.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.stats.min }
@@ -818,6 +1004,24 @@ Function Format-Quartiles {
     }
 }
 
+
+##
+# Format-MinMaxChart
+# ----------------
+# This function formats a table that displays min, mean, and max of each data subcategory, 
+# one table per property. This table primarily serves to generate a line chart for the
+# visualization of this data.
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Object containing processed data, raw data, and meta data
+# TableTitle (String) - Title to be displayed at the top of each table
+#
+# Return
+# ------
+# HashTable[] - Array of HashTable objects which each store a table of formatted data
+#
+##
 Function Format-MinMaxChart {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
@@ -831,7 +1035,7 @@ Function Format-MinMaxChart {
         $meta = $DataObj.meta
         $sortProp = $meta.sortProp
 
-        ForEach ($prop in $data.keys) {
+        foreach ($prop in $data.keys) {
             $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop) 
             $table = @{
                 "rows" = @{
@@ -914,7 +1118,7 @@ Function Format-MinMaxChart {
             }
             $col = 0
             $row = 0
-            ForEach ($sortKey in $data.$prop.Keys | Sort) {
+            foreach ($sortKey in $data.$prop.Keys | Sort) {
                 # Add column labels to table
                 $table.cols.$TableTitle.$sortProp.$sortKey = $col
                 $table.meta.columnFormats += $meta.format.$prop
@@ -924,9 +1128,9 @@ Function Format-MinMaxChart {
                 }
             
                 # Add row labels and fill data in table
-                ForEach ($metric in @("min", "mean", "max")) {
-                    if (-Not ($table.rows.$prop.Keys -Contains $metric)) { 
-                        if (-Not $meta.comparison){
+                foreach ($metric in @("min", "mean", "max")) {
+                    if (-not ($table.rows.$prop.Keys -contains $metric)) { 
+                        if (-not $meta.comparison){
                             $table.rows.$prop.$metric = $row
                             $row += 1
                         } else {
@@ -937,11 +1141,11 @@ Function Format-MinMaxChart {
                             $row += 2
                         }
                     }
-                    if (-Not ($table.data.$TableTitle.$sortProp.$sortKey.$prop.Keys -Contains $metric)) {
+                    if (-not ($table.data.$TableTitle.$sortProp.$sortKey.$prop.Keys -contains $metric)) {
                         $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{}
                     }
 
-                    if (-Not $meta.comparison) {
+                    if (-not $meta.comparison) {
                         $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
                     } else {
                         $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.baseline = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
@@ -964,6 +1168,25 @@ Function Format-MinMaxChart {
     
 }
 
+
+##
+# Format-Percentiles
+# ----------------
+# This function formats a table displaying percentiles of each data subcategory, one
+# table per property + sortProp combo. When in comparison mode, percent change is also
+# plotted and is color-coded to indicate improvement/regression. A chart is also formatted
+# with each table.  
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Object containing processed data, raw data, and meta data
+# TableTitle (String) - Title to be displayed at the top of each table
+#
+# Return
+# ------
+# HashTable[] - Array of HashTable objects which each store a table of formatted percentile data
+#
+##
 Function Format-Percentiles {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
@@ -976,8 +1199,8 @@ Function Format-Percentiles {
         $meta = $DataObj.meta
         $sortProp = $meta.sortProp
         $baseTitle = $TableTitle
-        ForEach ($prop in $data.Keys) {
-            ForEach ($sortKey in $data.$prop.Keys | Sort) {
+        foreach ($prop in $data.Keys) {
+            foreach ($sortKey in $data.$prop.Keys | Sort) {
                 $note = ""
                 if ($sortProp) {
                     $note = " - $sortProp $sortKey"
@@ -1053,7 +1276,7 @@ Function Format-Percentiles {
                 }
                 $row = 0
                 # Add row labels and fill data in table
-                ForEach ($percentile in $data.$prop.$sortKey.baseline.percentiles.Keys | Sort) {
+                foreach ($percentile in $data.$prop.$sortKey.baseline.percentiles.Keys | Sort) {
                     $table.rows.percentiles.$percentile = $row
                     if ($meta.comparison) {
                         $percentage = $data.$prop.$sortKey."% change".percentiles.$percentile
@@ -1062,10 +1285,10 @@ Function Format-Percentiles {
                         $table.data.$TableTitle.$prop."% change".percentiles.$percentile = @{"value" = $percentage}
                         $table.data.$TableTitle.$prop.test.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.test.percentiles.$percentile}
                         $params = @{
-                            "cell" = $table.data.$TableTitle.$prop."% change".percentiles.$percentile
-                            "value" = $data.$prop.$sortKey.test.percentiles.$percentile
-                            "target" = $data.$prop.$sortKey.baseline.percentiles.$percentile
-                            "goal" = $meta.goal.$prop
+                            "Cell" = $table.data.$TableTitle.$prop."% change".percentiles.$percentile
+                            "TestVal" = $data.$prop.$sortKey.test.percentiles.$percentile
+                            "BaseVal" = $data.$prop.$sortKey.baseline.percentiles.$percentile
+                            "Goal" = $meta.goal.$prop
                         }
                         $table.data.$TableTitle.$prop."% change".percentiles.$percentile = Select-Color @params
                     } else {
@@ -1088,6 +1311,25 @@ Function Format-Percentiles {
     }
 }
 
+
+##
+# Format-Distribution
+# -------------------
+# This function formats a table in order to create a chart that displays the the
+# distribution of data over time.
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Object containing processed data, raw data, and meta data
+# TableTitle (String) - Title to be displayed at the top of each table
+# Prop (String) - The name of the property for which a table should be created (raw data must be in array form)
+# SubSampleRate (int) - How many time samples should be grouped together for a single data point on the chart
+#
+# Return
+# ------
+# HashTable[] - Array of HashTable objects which each store a table of formatted distribution data
+#
+##
 Function Format-Distribution {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
@@ -1106,7 +1348,7 @@ Function Format-Distribution {
         }
         $tables = @()
         $originalTitle = $TableTitle
-        ForEach ($mode in $modes) {
+        foreach ($mode in $modes) {
             if ($tables.Count -gt 0) {
                 $tables += "NEW"
             }
@@ -1165,7 +1407,7 @@ Function Format-Distribution {
             $NumSegments = $data[0].$Prop.Count / $SubSampleRate
             while ($i -lt $NumSegments) {
                 [Array]$segmentData = @()
-                ForEach ($entry in $data) {
+                foreach ($entry in $data) {
                     $segmentData += $entry[$Prop][($i * $SubSampleRate) .. ((($i + 1) * $SubSampleRate) - 1)]
                 }
                 $segmentData = $segmentData | Sort
@@ -1217,33 +1459,64 @@ Function Format-Distribution {
     }
 }
 
-# Selects the color of a cell, indicating whether a value
-# shows an improvement when compared to a target, and 
-# dependent on the goal (increase/decrease) for the given value  
-Function Select-Color ($cell, $value, $target, $goal) {
-    if ( $goal -eq "increase") {
-        if ($value -ge $target) {
-            $cell["fontColor"] = $GREEN
-            $cell["cellColor"] = $LIGHTGREEN
+
+##
+# Select-Color
+# ------------
+# This function selects the color of a cell, indicating whether a test value
+# shows an improvement when compared to a baseline value. Improvement is defined
+# by the goal (increase/decrease) for the given value.
+# 
+# Parameters
+# ----------
+# Cell (HashTable) - Object containg a cell's value and other settings
+# TestVal (decimal) - Test value
+# BaseVal (decimal) - Baseline value
+# Goal (String) - Defines improvement ("increase" or "decrease")
+#
+# Return
+# ------
+# HashTable - Object containing a cell's value and other settings
+#
+##  
+Function Select-Color ($Cell, $TestVal, $BaseVal, $Goal) {
+    if ( $Goal -eq "increase") {
+        if ($TestVal -ge $BaseVal) {
+            $Cell["fontColor"] = $GREEN
+            $Cell["cellColor"] = $LIGHTGREEN
         } else {
-            $cell["fontColor"] = $RED
-            $cell["cellColor"] = $LIGHTRED
+            $Cell["fontColor"] = $RED
+            $Cell["cellColor"] = $LIGHTRED
         }
     } else {
-        if ($value -le $target) {
-            $cell["fontColor"] = $GREEN
-            $cell["cellColor"] = $LIGHTGREEN
+        if ($TestVal -le $BaseVal) {
+            $Cell["fontColor"] = $GREEN
+            $Cell["cellColor"] = $LIGHTGREEN
         } else {
-            $cell["fontColor"] = $RED
-            $cell["cellColor"] = $LIGHTRED
+            $Cell["fontColor"] = $RED
+            $Cell["cellColor"] = $LIGHTRED
         }
     }
     return $cell
 }
 
-# Returns statistical metrics computed over an array of values
-Function Calculate-Stats ($arr) {
-    $measures = ($arr | Measure -Average -Maximum -Minimum -Sum)
+
+##
+# Calculate-Stats
+# ---------------
+# Calculates and returns statistical metrics calculated over an array of values
+#
+# Parameters
+# ----------
+# Arr (decimal[]) - Array of values to calculate statistics over
+#
+# Return
+# ------
+# HashTable - Object containing statistical metric calculated over Arr
+#
+## 
+Function Calculate-Stats ($Arr) {
+    $measures = ($Arr | Measure -Average -Maximum -Minimum -Sum)
     $stats = @{
         "count" = $measures.Count
         "sum" = $measures.Sum
@@ -1259,8 +1532,8 @@ Function Calculate-Stats ($arr) {
     $curVal = $null
     $mode = $null
     $modeCount = 0
-    $arr = $arr | Sort
-    ForEach ($val in $arr) {
+    $Arr = $Arr | Sort
+    foreach ($val in $Arr) {
         if ($val -ne $curVal) {
             $curVal = $val
             $curCount = 1
@@ -1275,7 +1548,7 @@ Function Calculate-Stats ($arr) {
         $squareDiffSum += [Math]::Pow(($val - $measures.Average), 2)
         $quadDiffSum += [Math]::Pow(($val - $measures.Average), 4)
     }
-    $stats["median"] = $arr[[int]($N / 2)]
+    $stats["median"] = $Arr[[int]($N / 2)]
     $stats["mode"] = $mode
     $stats["range"] = $stats["max"] - $stats["min"]
     $stats["std dev"] = [Math]::Sqrt(($squareDiffSum / ($N - 1)))
@@ -1284,7 +1557,7 @@ Function Calculate-Stats ($arr) {
 
     if ($N -gt 3) {
         $stats["kurtosis"] = (($N * ($N + 1))/( ($N - 1) * ($N - 2) * ($N - 3))) * ($quadDiffSum / [Math]::Pow($stats["variance"], 2)) - 3 * ([Math]::Pow($N - 1, 2) / (($N - 2) * ($N - 3)) )
-        ForEach ($val in $arr | Sort) { 
+        foreach ($val in $Arr | Sort) { 
             $cubeDiffSum += [Math]::Pow(($val - $measures.Average) / $stats["std dev"], 3) 
         }
         $stats["skewness"] = ($N / (($N - 1) * ($N - 2))) * $cubeDiffSum
@@ -1292,31 +1565,72 @@ Function Calculate-Stats ($arr) {
     return $stats
 }
 
-# Calculates the width of a tree data structure
+
+##
+# Get-TreeWidth
+# -------------
+# Calculates the width of a tree structure
+#
+# Parameters 
+# ----------
+# Tree (HashTable) - Object with a heirarchical tree structure
+#
+# Return
+# ------
+# int - Width of Tree
+#
+##
 Function Get-TreeWidth ($Tree) {
     if ($Tree.GetType().Name -eq "Int32") {
         return 1
     }
     $width = 0
-    ForEach ($key in $Tree.Keys) {
+    foreach ($key in $Tree.Keys) {
         $width += [int](Get-TreeWidth -Tree $Tree[$key])
     }
     return $width
 }
 
-# Calculates the depth of a tree data structure
+##
+# Get-TreeWidth
+# -------------
+# Calculates the depth of a tree structure
+#
+# Parameters 
+# ----------
+# Tree (HashTable) - Object with a heirarchical tree structure
+#
+# Return
+# ------
+# int - Depth of Tree
+#
+##
 Function Get-TreeDepth ($Tree){
     if ($Tree.GetType().Name -eq "Int32") {
         return 0
     }
     $depths = @()
-    ForEach ($key in $Tree.Keys) {
+    foreach ($key in $Tree.Keys) {
         $depths = $depths + [int](Get-TreeDepth -Tree $Tree[$key])
     }
     return ($depths | Measure -Maximum).Maximum + 1
 }
 
-# Sorts an array of objects by the value of an indicated property
+##
+# Sort-ByProp
+# -------------
+# Sorts an array of objects by the value of a specified property in each object
+#
+# Parameters 
+# ----------
+# Data (HashTable[]) - Array of objects
+# Prop (String) - Name of property to sort by
+#
+# Return
+# ------
+# HashTable[] - Array of objects, sorted by property value
+#
+##
 Function Sort-ByProp {
     param(
         [Parameter()]
@@ -1362,25 +1676,47 @@ Function Sort-ByProp {
 
 # Excel Population --------------------------------------------------------------------------------
 
+##
+# Create-ExcelSheet
+# -----------------
+# This function plots tables in excel and can use those tables to generate charts. The function
+# receives data in a custom format which it uses to create tables. 
+# 
+# Parameters
+# ----------
+# Tables (HashTable[]) - Array of table objects
+# SaveDir (String) - Directory to save excel workbook w/ auto-generated name at if no savePath is provided
+# Tool (String) - Name of tool for which a report is being created
+# SavePath (String) - Path and filename for where to save excel workbook, if none is supplied a file name is 
+#                     auto-generated
+#
+# Returns
+# -------
+# (String) - Name of saved file
+#
+##
 Function Create-ExcelSheet {
     param (
         [Parameter(Mandatory=$true)] 
         [PSObject[]]$Tables,
 
+        [Parameter()]
+        [String] $SaveDir="$home\Documents",
+
         [Parameter(Mandatory=$true)]
-        [string]$ExcelFileName,
+        [string]$Tool,
 
         [Parameter()]
-        [string]$SavePath = "$home\Documents\PSreports"
+        [string]$SavePath = $null
     )
 
-    if  ( !( Test-Path -Path $SavePath -PathType "Container" ) ) { 
-        New-Item -Path $SavePath -ItemType "Container" -ErrorAction Stop | Out-Null
+    if  ( (-not $SavePath) -and !( Test-Path -Path $SaveDir -PathType "Container" ) ) { 
+        New-Item -Path $SaveDir -ItemType "Container" -ErrorAction Stop | Out-Null
     }
 
     $date = Get-Date -UFormat "%Y-%m-%d_%H-%M-%S"
 
-    $excelFile = "$SavePath\$ExcelFileName-$($date).xlsx"
+    $excelFile = "$SaveDir\$FileName-$($date).xlsx"
     $excelFile = $excelFile.Replace(" ", "_")
 
     try {
@@ -1391,7 +1727,7 @@ Function Create-ExcelSheet {
             
         [int]$rowOffset = 1
         [int] $chartNum = 1
-        ForEach ($table in $Tables) {
+        foreach ($table in $Tables) {
             if ($table -eq "NEW") {
                 $chartNum = 1
                 $worksheetObject.UsedRange.Columns.Autofit() | Out-Null
@@ -1437,11 +1773,30 @@ Function Create-ExcelSheet {
 
         return [string]$excelFile
     } catch {
-        Write-Warning "SaveToExcel function failed"
-        Write-Warning "Error message: $_"
+        Write-Warning "Error at Create-ExcelSheet"
+        Write-Error $_.Exception.Message
     } 
 }
 
+##
+# Create-Chart
+# ------------
+# This function uses a table's chartSettings to create and customize a chart
+# that visualizes the table's data. 
+#
+# Parameters
+# ----------
+# WorkSheet (ComObject) - Object containing the current worksheet's internal state
+# Table (HashTable) - Object containing formatted data and chart settings
+# StartRow (int) - The row number on which the top of the already-plotted table begins
+# StartCol (int) - The column number on which the left side of the already-plotted table begins
+# ChartNum (int) - The index this chart will occupy in the worksheet's internally-stored lisrt of charts
+#
+# Return
+# ------
+# None
+#
+##
 Function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
     $chart = $Worksheet.Shapes.AddChart().Chart 
 
@@ -1465,7 +1820,7 @@ Function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
     }
      
     if ($Table["chartSettings"]["seriesSettings"]) {
-        ForEach($seriesNum in $Table["chartSettings"]["seriesSettings"].Keys) {
+        foreach($seriesNum in $Table["chartSettings"]["seriesSettings"].Keys) {
             if ($Table["chartSettings"]["seriesSettings"][$seriesNum]["hide"]) {
                 $chart.SeriesCollection($seriesNum).format.fill.ForeColor.TintAndShade = 1
                 $chart.SeriesCollection($seriesNum).format.fill.Transparency = 1
@@ -1485,7 +1840,7 @@ Function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
     }
 
     if ($Table["chartSettings"]["axisSettings"]) {
-        ForEach($axisNum in $Table["chartSettings"]["axisSettings"].Keys) {
+        foreach($axisNum in $Table["chartSettings"]["axisSettings"].Keys) {
             if ($Table["chartSettings"]["axisSettings"][$axisNum]["min"]) { 
                 $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MinimumScale = $Table["chartSettings"]["axisSettings"][$axisNum]["min"]
             }
@@ -1524,26 +1879,62 @@ Function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
     $Worksheet.Shapes.Item("Chart " + $chartNum ).left = $Worksheet.Cells($StartRow, $StartCol + $width + 1).left
 }
 
-Function Fill-Cell ($Worksheet, $Row, $Col, [AllowNull()]$Text=$null, $FontColor = $null, $CellColor = $null, $Bold = $false, $Center = $false) {
+
+##
+# Fill-Cell
+# ---------
+# This function fills an excel cell with a value, and optionally also customizes the cell style.
+# 
+# Parameters
+# ----------
+# Worksheet (ComObject) - Object containing the current worksheet's internal state
+# Row (int) - Row index of the cell to fill
+# Col (int) - Column index of the cell to fill
+# CellSettings (HashTable) - Object containing the value and style settings for the cell
+#
+# Return
+# ------
+# None
+#
+##
+Function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
     $Worksheet.Cells($Row, $Col).Borders.LineStyle = 1
-    if ($FontColor) {
-        $Worksheet.Cells($Row, $Col).Font.Color = $FontColor
+    if ($CellSettings.fontColor) {
+        $Worksheet.Cells($Row, $Col).Font.Color = $CellSettings.fontColor
     }
-    if ($CellColor) {
-        $Worksheet.Cells($Row, $Col).Interior.Color = $CellColor
+    if ($CellSettings.cellColor) {
+        $Worksheet.Cells($Row, $Col).Interior.Color = $CellSettings.cellColor
     }
-    if ($Bold) {
+    if ($CellSettings.bold) {
         $Worksheet.Cells($Row, $Col).Font.Bold = $true
     }
-    if ($Center) {
+    if ($CellSettings.center) {
         $Worksheet.Cells($Row, $Col).HorizontalAlignment = -4108
         $Worksheet.Cells($Row, $Col).VerticalAlignment = -4108
     }
-    if ($Text -ne $null) {
-        $Worksheet.Cells($Row, $Col) = $Text
+    if ($CellSettings.value -ne $null) {
+        $Worksheet.Cells($Row, $Col) = $CellSettings.value
     }
 }
 
+##
+# Merge-Cells
+# -----------
+# This function merges a range of cells into a single cell and adds a border
+#
+# Parameters
+# ----------
+# Worksheet (ComObject) - Object containing the current worksheet's internal state
+# Row1 (int) - Row index of top left cell of range to merge
+# Col1 (int) - Column index of top left cell of range to merge
+# Row2 (int) - Row index of bottom right cell of range to merge
+# Col2 (int) - Column index of bottom right cell of range to merge
+#
+# Return 
+# ------
+# None
+#
+##
 Function Merge-Cells ($Worksheet, $Row1, $Col1, $Row2, $Col2) {
     $cells = $Worksheet.Range($Worksheet.Cells($Row1, $Col1), $Worksheet.Cells($Row2, $Col2))
     $cells.Select()
@@ -1552,13 +1943,36 @@ Function Merge-Cells ($Worksheet, $Row1, $Col1, $Row2, $Col2) {
 }
 
 
-Function Fill-ColLabels ($Worksheet, $cols, $startCol, $row) {
+##
+# Fill-ColLabels
+# --------------
+# This function consumes the cols field of a table object, and plots the column labels by recursing 
+# through the object. 
+#
+# Parameters 
+# ----------
+# Worksheet (ComObject) - Object containing the current worksheet's internal state
+# Cols (HashTable) - Object storing column label structure and column indices of labels. 
+# StartCol (int) - The column index on which the labels should start being drawn (left edge)
+# Row (int) - The row at which the current level of labels should be drawn
+#
+# Return 
+# ------
+# (int[]) - Tuple of integers capturing the column index range across which the just-drawn label spans
+#
+##
+Function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
     $range = @(-1, -1)
-    ForEach ($label in $cols.Keys) {
-        if ($cols[$label].GetType().Name -ne "Int32") {
-            $subRange = Fill-ColLabels -Worksheet $Worksheet -cols $cols[$label] -startCol $startCol -row ($row + 1)
-            Merge-Cells -Worksheet $Worksheet -Row1 $row -Col1 $subRange[0] -Row2 $row -Col2 $subRange[1] | Out-Null
-            Fill-Cell -Worksheet $Worksheet -Row $row -Col $subRange[0] -Text $label -Bold $true -Center $true | Out-Null
+    foreach ($label in $Cols.Keys) {
+        if ($Cols[$label].GetType().Name -ne "Int32") {
+            $subRange = Fill-ColLabels -Worksheet $Worksheet -Cols $Cols[$label] -StartCol $StartCol -Row ($Row + 1)
+            Merge-Cells -Worksheet $Worksheet -Row1 $Row -Col1 $subRange[0] -Row2 $Row -Col2 $subRange[1] | Out-Null
+            $cellSettings = @{
+                "value" = $label
+                "bold" = $true
+                "center" = $true
+            }
+            Fill-Cell -Worksheet $Worksheet -Row $Row -Col $subRange[0] -CellSettings $cellSettings | Out-Null
             if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1)){
                 $range[0] = $subRange[0]
             } 
@@ -1566,12 +1980,17 @@ Function Fill-ColLabels ($Worksheet, $cols, $startCol, $row) {
                 $range[1] = $subRange[1]
             }
         } else {
-            Fill-Cell $Worksheet -Row $row -Col ($startCol + $cols[$label]) -Text $label -Bold $true -Center $true | Out-Null
-            if (($startCol + $cols[$label] -lt $range[0]) -or ($range[0] -eq -1)) {
-                $range[0] = $startCol + $cols[$label]
+            $cellSettings = @{
+                "value" = $label
+                "bold" = $true
+                "center" = $true
             }
-            if (($startCol + $cols[$label] -gt $range[1]) -or ($range[1] -eq -1)) {
-                $range[1] = $startCol + $cols[$label]
+            Fill-Cell $Worksheet -Row $Row -Col ($StartCol + $Cols[$label]) -CellSettings $cellSettings | Out-Null
+            if (($StartCol + $Cols[$label] -lt $range[0]) -or ($range[0] -eq -1)) {
+                $range[0] = $StartCol + $Cols[$label]
+            }
+            if (($StartCol + $Cols[$label] -gt $range[1]) -or ($range[1] -eq -1)) {
+                $range[1] = $StartCol + $Cols[$label]
             }
         }    
         
@@ -1579,13 +1998,37 @@ Function Fill-ColLabels ($Worksheet, $cols, $startCol, $row) {
     return $range
 }
 
-Function Fill-RowLabels ($Worksheet, $rows, $startRow, $col) {
+
+##
+# Fill-RowLabels
+# --------------
+# This function consumes the rows field of a table object, and plots the row labels by recursing 
+# through the object. 
+#
+# Parameters 
+# ----------
+# Worksheet (ComObject) - Object containing the current worksheet's internal state
+# Rows (HashTable) - Object storing row label structure and row indices of labels. 
+# StartRow (int) - The row index on which the labels should start being drawn (top edge)
+# Col (int) - The column at which the current level of labels should be drawn
+#
+# Return 
+# ------
+# (int[]) - Tuple of integers capturing the row index range across which the just-drawn label spans
+#
+##
+Function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
     $range = @(-1, -1)
-    ForEach ($label in $rows.Keys) {
-        if ($rows[$label].GetType().Name -ne "Int32") {
-            $subRange = Fill-RowLabels -Worksheet $Worksheet -rows $rows[$label] -startRow $startRow -col ($col + 1)
-            Merge-Cells -Worksheet $Worksheet -Row1 $subRange[0] -Col1 $col -Row2 $subRange[1] -Col2 $col | Out-Null
-            Fill-Cell -Worksheet $Worksheet -Row $subRange[0] -Col $col -Text $label -Bold $true -Center $true
+    foreach ($label in $rows.Keys) {
+        if ($Rows[$label].GetType().Name -ne "Int32") {
+            $subRange = Fill-RowLabels -Worksheet $Worksheet -Rows $Rows[$label] -StartRow $StartRow -Col ($Col + 1)
+            Merge-Cells -Worksheet $Worksheet -Row1 $subRange[0] -Col1 $Col -Row2 $subRange[1] -Col2 $Col | Out-Null
+            $cellSettings = @{
+                "value" = $label
+                "bold" = $true
+                "center" = $true
+            }
+            Fill-Cell -Worksheet $Worksheet -Row $subRange[0] -Col $Col -CellSettings $cellSettings | Out-Null
             if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1)){
                 $range[0] = $subRange[0]
             } 
@@ -1593,27 +2036,56 @@ Function Fill-RowLabels ($Worksheet, $rows, $startRow, $col) {
                 $range[1] = $subRange[1]
             }
         } else {
-            Fill-Cell $Worksheet -Row ($startRow + $rows[$label]) -Col $col -Text $label -Bold $true -Center $true
-            if (($startRow + $rows[$label] -lt $range[0]) -or ($range[0] -eq -1)) {
-                $range[0] = $startRow + $rows[$label]
+            $cellSettings = @{
+                "value" = $label
+                "bold" = $true
+                "center" = $true
             }
-            if (($startRow + $rows[$label] -gt $range[1]) -or ($range[1] -eq -1)) {
-                $range[1] = $startRow + $rows[$label]
+            Fill-Cell $Worksheet -Row ($StartRow + $Rows[$label]) -Col $Col -CellSettings $cellSettings | Out-Null
+            if (($StartRow + $Rows[$label] -lt $range[0]) -or ($range[0] -eq -1)) {
+                $range[0] = $StartRow + $Rows[$label]
+            }
+            if (($StartRow + $Rows[$label] -gt $range[1]) -or ($range[1] -eq -1)) {
+                $range[1] = $StartRow + $Rows[$label]
             }
         }    
     }
     return $range
 }
 
+
+##
+# Fill-Data
+# ---------
+# This function uses the data, rows, and cols fields of a table object to fill in the data
+# values of a table. The objects are recursed through depth-first, and the path followed is used to retreive 
+# row and column indices from the Rows and Cols objects while data values and cell formatting are retreived from the
+# data object. 
+#
+# Parameters
+# ----------
+# Worksheet (ComObject) - Object containing the current worksheet's internal state
+# Data (HashTable) - Object containing data values and cell formatting
+# Cols (HashTable) - Object storing column label structure and column indices of the labels. 
+# Rows (HashTable) - Object storing row label structure and row indices of the labels.
+# StartCol (int) - Column index where the data range of the table begins (left edge) 
+# StartRow (int) - Row index where the data range of the table begins (top edge)
+#
+# Return
+# ------
+# None
+#
+## 
 Function Fill-Data ($Worksheet, $Data, $Cols, $Rows, $StartCol, $StartRow) {
     if($Cols.GetType().Name -eq "Int32" -and $Rows.GetType().Name -eq "Int32") {
-        Fill-Cell -Worksheet $Worksheet -Row ($StartRow + $Rows) -Col ($StartCol + $Cols) -Text $Data["value"] -FontColor $Data["fontColor"] -CellColor $Data["cellColor"]
+        Fill-Cell -Worksheet $Worksheet -Row ($StartRow + $Rows) -Col ($StartCol + $Cols) -CellSettings $Data
         return
     }  
-    ForEach ($label in $Data.Keys) {
+    foreach ($label in $Data.Keys) {
         if ($Cols.getType().Name -ne "Int32") {
             Fill-Data -Worksheet $Worksheet -Data $Data[$label] -Cols $Cols[$label] -Rows $Rows -StartCol $StartCol -StartRow $StartRow
         } else {
             Fill-Data -Worksheet $Worksheet -Data $Data[$label] -Cols $Cols -Rows $Rows[$label] -StartCol $StartCol -StartRow $StartRow
         }
     }
+}
