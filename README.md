@@ -1,4 +1,11 @@
+# Description
+Network-Data-Visualization is a tool used to visualize the data produced by various network performance analysis tools. Currently, the propject supports NTTTCP, LATTE, and CTStraffic. 
 
+# Usage
+For help and options when running this command directly, use:
+```PowerShell
+Get-Help Network-Data-Visualization
+```
 # Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
