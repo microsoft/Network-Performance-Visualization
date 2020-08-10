@@ -10,6 +10,10 @@ $RED = 2108032
 $BLUES = @(10249511, 14058822, 16758932)
 $ORANGES = @(294092, 1681916, 6014716)
 
+$XLENUM = New-Object -TypeName PSObject
+
+$Percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
+                                         99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
 # Interface ---------------------------------------------------------------------------------------
 
 Function Network-Data-Visualization 
@@ -77,8 +81,10 @@ Function Network-Data-Visualization
         [string]$SavePath = $none
     )
     
+    Init-XLENUM
+
     $ErrorActionPreference = "Stop"
-    
+
     $tool = ""
     if ($NTTTCP) 
     {
@@ -124,6 +130,22 @@ Function Network-Data-Visualization
     $fileName = Create-ExcelSheet -Tables $tables -SaveDir $SaveDir -Tool $tool -SavePath $SavePath
 
     Write-Host "Created report at $filename"
+}
+
+
+Function Init-XLENUM {
+    $xl = New-Object -ComObject Excel.Application -ErrorAction Stop
+    $xl.Quit() | Out-Null
+
+    $xl.GetType().Assembly.GetExportedTypes() | Where-Object {$_.IsEnum} | ForEach-Object {
+        $enum = $_
+        $enum.GetEnumNames() | ForEach-Object {
+            $XLENUM | Add-Member -MemberType NoteProperty -Name $_ -Value $enum::($_) -Force
+        }
+    }
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($xl) | Out-Null
+    [System.GC]::Collect() | Out-Null
+    [System.GC]::WaitForPendingFinalizers() | Out-Null
 }
 
 # File Parsing ------------------------------------------------------------------------------------
@@ -433,12 +455,14 @@ Function Parse-LATTE ([string] $FileName)
 # ------
 # HashTable - Object containing processed data, raw data, and meta data
 ##
-Function Process-Data {
+Function Process-Data 
+{
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $BaselineDataObj,
         [Parameter()] [PSobject[]] $TestDataObj
     )
-    try {
+    try 
+    {
         $processedDataObj = @{
             "meta" = $BaselineDataObj.meta
             "data" = @{}
@@ -446,26 +470,32 @@ Function Process-Data {
                 "baseline" = $BaselineDataObj.data
             }
         }
-        if ($TestDataObj) {
+        if ($TestDataObj) 
+        {
             $processedDataObj.meta.comparison = $true
             $processedDataObj.rawData.test = $TestDataObj.data
         }
 
         $sortProp = $BaselineDataObj.meta.sortProp
-        foreach ($prop in ([Array]$BaselineDataObj.data)[0].Keys) {
-            if (($prop -eq $BaselineDataObj.meta.sortProp) -or ($BaselineDataObj.meta.noTable -contains $prop)) {
+        foreach ($prop in ([Array]$BaselineDataObj.data)[0].Keys) 
+        {
+            if (($prop -eq $BaselineDataObj.meta.sortProp) -or ($BaselineDataObj.meta.noTable -contains $prop)) 
+            {
                 continue
             }
 
             # Organize baseline data by sortProp values
             $processedDataObj.data.$prop = @{}
             $modes = @("baseline")
-            foreach($item in $BaselineDataObj.data) {
+            foreach($item in $BaselineDataObj.data) 
+            {
                 $sortKey = "allData"
-                if ($sortProp) {
+                if ($sortProp) 
+                {
                     $sortKey = $item.$sortProp 
                 } 
-                if (-not ($processedDataObj.data.$prop.Keys -contains $sortKey)) {
+                if (-not ($processedDataObj.data.$prop.Keys -contains $sortKey)) 
+                {
                     $processedDataObj.data.$prop.$sortKey = @{
                         "baseline" = @{
                             "orderedData" = @()
@@ -476,14 +506,18 @@ Function Process-Data {
             }
 
             # Organize test data by sortProp values, if test data is provided
-            if ($TestDataObj) {
+            if ($TestDataObj) 
+            {
                 $modes += "test"
-                foreach ($item in $TestDataObj.data) {
+                foreach ($item in $TestDataObj.data) 
+                {
                     $sortKey = "allData"
-                    if ($sortProp) {
+                    if ($sortProp) 
+                    {
                         $sortKey = $item.$sortProp 
                     }
-                    if (-not ($processedDataObj.data.$prop.$sortKey.Keys -contains "test")) {
+                    if (-not ($processedDataObj.data.$prop.$sortKey.Keys -contains "test")) 
+                    {
                         $processedDataObj.data.$prop.$sortKey.test = @{
                             "orderedData" = @()
                         }
@@ -494,29 +528,33 @@ Function Process-Data {
             }
 
             # Calculate stats and percentiles for each sortKey, calculate % change if necessary
-            foreach ($sortKey in $processedDataObj.data.$prop.Keys) {
-                $percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
-                                         99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
-                foreach ($mode in $modes) {
+            foreach ($sortKey in $processedDataObj.data.$prop.Keys) 
+            {
+                foreach ($mode in $modes) 
+                {
                     $processedDataObj.data.$prop.$sortKey.$mode.orderedData = $processedDataObj.data.$prop.$sortKey.$mode.orderedData | Sort
                     $stats = Calculate-Stats -arr $processedDataObj.data.$prop.$sortKey.$mode.orderedData
                     $processedDataObj.data.$prop.$sortKey.$mode.stats = $stats
                     $processedDataObj.data.$prop.$sortKey.$mode.percentiles = @{}
-                    foreach ($percentile in $percentiles) {
+                    foreach ($percentile in $Percentiles) 
+                    {
                         $idx = [int] (($percentile / 100) * ($processedDataObj.data.$prop.$sortKey.$mode.orderedData.Count - 1))
                         $value = $processedDataObj.data.$prop.$sortKey.$mode.orderedData[$idx]
                         $processedDataObj.data.$prop.$sortKey.$mode.percentiles.$percentile = $value
                     }
                 } 
-                if ($TestDataObj) {
+                if ($TestDataObj) 
+                {
                     $processedDataObj.data.$prop.$sortKey."% change".stats = @{}
-                    foreach ($metric in $processedDataObj.data.$prop.$sortKey.$mode.stats.Keys) {
+                    foreach ($metric in $processedDataObj.data.$prop.$sortKey.$mode.stats.Keys) 
+                    {
                         $diff = $processedDataObj.data.$prop.$sortKey."test".stats.$metric - $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric
                         $percentChange = 100 * ($diff / [math]::Abs( $processedDataObj.data.$prop.$sortKey."baseline".stats.$metric))
                         $processedDataObj.data.$prop.$sortKey."% change".stats.$metric = $percentChange
                     }
                     $processedDataObj.data.$prop.$sortKey."% change".percentiles = @{}
-                    foreach ($percentile in $percentiles) {
+                    foreach ($percentile in $Percentiles) 
+                    {
                         $percentChange = 100 * (($processedDataObj.data.$prop.$sortKey."test".percentiles.$percentile / $processedDataObj.data.$prop.$sortKey."baseline".percentiles.$percentile) - 1)
                         $processedDataObj.data.$prop.$sortKey."% change".percentiles.$percentile = $percentChange
                     }
@@ -524,7 +562,9 @@ Function Process-Data {
             }
         }
         return $processedDataObj
-    } catch {
+    } 
+    catch 
+    {
         Write-Warning "Error in Process-Data"
         Write-Error $_.Exception.Message
     }
@@ -549,14 +589,16 @@ Function Process-Data {
 # HashTable[] - Array of HashTable objects which each store a table of formatted raw data
 #
 ##
-Function Format-RawData {
+Function Format-RawData 
+{
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
         [Parameter()] [String] $TableTitle = ""
     )
 
-    try {
+    try 
+    {
         $tables = @() 
         $meta = $DataObj.meta
         $sortProp = $meta.sortProp 
@@ -607,30 +649,36 @@ Function Format-RawData {
             }
         }
 
-        if ($meta.comparison) {
+        if ($meta.comparison) 
+        {
             $tables += $legend
         }
 
         # Fill single array with all data and sort, label data as baseline/test if necessary
         [Array] $data = @()
         $baseData = $DataObj.rawData.baseline
-        foreach ($entry in $baseData) {
-            if ($meta.comparison) {
+        foreach ($entry in $baseData) 
+        {
+            if ($meta.comparison) 
+            {
                 $entry.baseline = $true
             }
             $data += $entry
         }
 
-        if ($meta.comparison) {
+        if ($meta.comparison) 
+        {
             $testData = $DataObj.rawData.test
-            foreach ($entry in $testData) {
+            foreach ($entry in $testData) 
+            {
                 $data += $entry
             }
         }
 
         $data = Sort-ByProp -Data $data -Prop $sortProp
 
-        foreach ($prop in $dataObj.data.Keys) {
+        foreach ($prop in $dataObj.data.Keys) 
+        {
             $table = @{
                 "rows" = @{
                     $prop = @{}
@@ -647,12 +695,15 @@ Function Format-RawData {
             }
             $col = 0
             $row = 0
-            foreach ($entry in $data){
+            foreach ($entry in $data)
+            {
                 $sortKey = $entry.$sortProp
 
                 # Add column labels to table
-                if (-not ($table.cols.$TableTitle.Keys -contains $sortKey)) {
-                    if ($meta.comparison) {
+                if (-not ($table.cols.$TableTitle.Keys -contains $sortKey)) 
+                {
+                    if ($meta.comparison) 
+                    {
                         $table.cols.$TableTitle.$sortKey = @{
                             "baseline" = $col
                             "test" = $col + 1
@@ -668,7 +719,9 @@ Function Format-RawData {
                                 $prop = @{}
                             }
                         }
-                    } else {
+                    } 
+                    else 
+                    {
                         $table.cols.$TableTitle.$sortKey = $col
                         $table.meta.columnFormats += $meta.format.$prop
                         $col += 1
@@ -682,12 +735,16 @@ Function Format-RawData {
                 $filename = $entry.fileName
                 $table.rows.$prop.$filename = $row
                 $row += 1
-                if ($meta.comparison) {
-                    if ($entry.baseline) {
+                if ($meta.comparison) 
+                {
+                    if ($entry.baseline) 
+                    {
                         $table.data.$TableTitle.$sortKey.baseline.$prop.$filename = @{
                             "value" = $entry.$prop
                         }
-                    } else {
+                    } 
+                    else 
+                    {
                         $table.data.$TableTitle.$sortKey.test.$prop.$filename = @{
                             "value" = $entry.$prop
                         }
@@ -699,7 +756,9 @@ Function Format-RawData {
                         }
                         $table.data.$TableTitle.$sortKey.test.$prop.$filename = Select-Color @params
                     }
-                } else {
+                } 
+                else 
+                {
                     $table.data.$TableTitle.$sortKey.$prop.$filename = @{
                         "value" = $entry.$prop
                     }
@@ -712,13 +771,17 @@ Function Format-RawData {
             $tables = $tables + $table
         }
 
-        foreach ($entry in $data) {
-            if ($entry.baseline) {
+        foreach ($entry in $data) 
+        {
+            if ($entry.baseline) 
+            {
                 $entry.Remove("baseline")
             }
         }
         return $tables
-    } catch {
+    } 
+    catch 
+    {
         Write-Warning "Error at Format-RawData"
         Write-Error $_.Exception.Message
     }
@@ -744,7 +807,8 @@ Function Format-RawData {
 # HashTable[] - Array of HashTable objects which each store a table of formatted statistical data
 #
 ##
-Function Format-Stats {
+Function Format-Stats 
+{
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
@@ -753,11 +817,13 @@ Function Format-Stats {
         [Parameter()] [Array] $Metrics=$null
     )
     
-    try {
+    try 
+    {
         $tables = @()
         $data = $DataObj.data
         $meta = $DataObj.meta
-        foreach ($prop in $data.keys) { 
+        foreach ($prop in $data.keys) 
+        { 
             $table = @{
                 "rows" = @{
                     $prop = @{}
@@ -774,17 +840,21 @@ Function Format-Stats {
             }
             $col = 0
             $row = 0
-            foreach ($sortKey in $data.$prop.Keys | Sort) { 
+            foreach ($sortKey in $data.$prop.Keys | Sort) 
+            { 
 
                 # Add column labels to table
-                if (-not $meta.comparison) {
+                if (-not $meta.comparison) 
+                {
                     $table.cols.$TableTitle.$sortKey = $col
                     $table.meta.columnFormats += $meta.format.$prop 
                     $table.data.$TableTitle.$sortKey = @{
                         $prop = @{}
                     }
                     $col += 1
-                } else {
+                } 
+                else 
+                {
                     $table.cols.$TableTitle.$sortKey = @{
                         "baseline" = $col
                         "% Change" = $col + 1
@@ -807,19 +877,25 @@ Function Format-Stats {
                     }
                 }
 
-                if (-not $Metrics) {
+                if (-not $Metrics) 
+                {
                     $Metrics = ($data.$prop.$sortKey.baseline.stats.Keys | Sort)
                 }
 
                 # Add row labels and fill data in table
-                foreach ($metric in $Metrics) {
-                    if (-not ($table.rows.$prop.Keys -contains $metric)) {
+                foreach ($metric in $Metrics) 
+                {
+                    if (-not ($table.rows.$prop.Keys -contains $metric)) 
+                    {
                         $table.rows.$prop.$metric = $row
                         $row += 1
                     }
-                    if (-not $meta.comparison) {
+                    if (-not $meta.comparison) 
+                    {
                         $table.data.$TableTitle.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
-                    } else {
+                    } 
+                    else 
+                    {
                         $table.data.$TableTitle.$sortKey.baseline.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
                         $table.data.$TableTitle.$sortKey.test.$prop.$metric = @{"value" = $data.$prop.$sortKey.test.stats.$metric}
                     
@@ -831,10 +907,13 @@ Function Format-Stats {
                             "BaseVal" = $data.$prop.$sortKey.baseline.stats.$metric
                             "Goal" = $meta.goal.$prop
                         }
-                        if (@("std dev", "variance", "kurtosis", "std err", "range") -contains $metric) {
+                        if (@("std dev", "variance", "kurtosis", "std err", "range") -contains $metric) 
+                        {
                             $params.goal = "decrease"
                             $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
-                        } elseif ( -not (@("sum", "count") -contains $metric)) {
+                        } 
+                        elseif ( -not (@("sum", "count") -contains $metric)) 
+                        {
                             $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
                         }
                     }
@@ -871,18 +950,21 @@ Function Format-Stats {
 # HashTable[] - Array of HashTable objects which each store a table of formatted quartile data
 #
 ##
-Function Format-Quartiles {
+Function Format-Quartiles 
+{
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
         [Parameter()] [String] $TableTitle = ""
     )
-    try {
+    try 
+    {
         $tables = @()
         $data = $DataObj.data
         $meta = $DataObj.meta
         $sortProp = $meta.sortProp
-        foreach ($prop in $data.Keys) { 
+        foreach ($prop in $data.Keys) 
+        { 
             $format = $meta.format.$prop
             $table = @{
                 "rows" = @{
@@ -933,8 +1015,8 @@ Function Format-Quartiles {
                     }
                 }
                 "chartSettings" = @{ 
-                    "chartType"=52
-                    "plotBy" = 2
+                    "chartType"= $XLENUM.xlColumnStacked
+                    "plotBy" = $XLENUM.xlColumns
                     "xOffset" = 1
                     "YOffset" = 1
                     "title"="$prop quartiles"
@@ -959,8 +1041,10 @@ Function Format-Quartiles {
         
             $row = 0
             # Add row labels and fill data in table
-            foreach ($sortKey in $data.$prop.Keys | Sort) {
-                if (-not $meta.comparison){
+            foreach ($sortKey in $data.$prop.Keys | Sort) 
+            {
+                if (-not $meta.comparison)
+                {
                     $table.rows.$prop.$sortProp.$sortKey = $row
                     $row += 1
                     $table.data.$TableTitle.min.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.stats.min }
@@ -968,7 +1052,9 @@ Function Format-Quartiles {
                     $table.data.$TableTitle.Q2.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[50] - $data.$prop.$sortKey.baseline.percentiles[25] } 
                     $table.data.$TableTitle.Q3.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[75] - $data.$prop.$sortKey.baseline.percentiles[50]}
                     $table.data.$TableTitle.Q4.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.stats.max - $data.$prop.$sortKey.baseline.percentiles[75] }
-                } else {
+                } 
+                else 
+                {
                     $table.rows.$prop.$sortProp.$sortKey = @{
                         "baseline" = $row
                         "test" = $row + 1
@@ -1004,7 +1090,9 @@ Function Format-Quartiles {
             $tables = $tables + $table
             return $tables
         }
-    } catch {
+    } 
+    catch 
+    {
         Write-Warning "Error at Format-Quartiles"
         Write-Error $_.Exception.Message
     }
@@ -1028,20 +1116,23 @@ Function Format-Quartiles {
 # HashTable[] - Array of HashTable objects which each store a table of formatted data
 #
 ##
-Function Format-MinMaxChart {
+Function Format-MinMaxChart 
+{
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
         [Parameter()] [String] $TableTitle = ""
     )
     
-    try {
+    try 
+    {
         $tables = @()
         $data = $DataObj.data
         $meta = $DataObj.meta
         $sortProp = $meta.sortProp
 
-        foreach ($prop in $data.keys) {
+        foreach ($prop in $data.keys) 
+        {
             $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop) 
             $table = @{
                 "rows" = @{
@@ -1061,8 +1152,8 @@ Function Format-MinMaxChart {
                     }
                 }
                 "chartSettings" = @{
-                    "chartType" = 65
-                    "plotBy" = 1
+                    "chartType" = $XLENUM.xlLineMarkers
+                    "plotBy" = $XLENUM.xlRows
                     "title" = $cappedProp
                     "xOffset" = 1
                     "yOffset" = 1
@@ -1079,7 +1170,8 @@ Function Format-MinMaxChart {
                     }
                 }
             }
-            if ($meta.comparison) {
+            if ($meta.comparison) 
+            {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
                         "color" = $BLUES[2]
@@ -1106,7 +1198,9 @@ Function Format-MinMaxChart {
                         "markerColor" = $ORANGES[0]
                     }
                 }
-            } else {
+            } 
+            else 
+            {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
                         "color" = $BLUES[2]
@@ -1124,7 +1218,8 @@ Function Format-MinMaxChart {
             }
             $col = 0
             $row = 0
-            foreach ($sortKey in $data.$prop.Keys | Sort) {
+            foreach ($sortKey in $data.$prop.Keys | Sort) 
+            {
                 # Add column labels to table
                 $table.cols.$TableTitle.$sortProp.$sortKey = $col
                 $table.meta.columnFormats += $meta.format.$prop
@@ -1134,7 +1229,8 @@ Function Format-MinMaxChart {
                 }
             
                 # Add row labels and fill data in table
-                foreach ($metric in @("min", "mean", "max")) {
+                foreach ($metric in @("min", "mean", "max")) 
+                {
                     if (-not ($table.rows.$prop.Keys -contains $metric)) { 
                         if (-not $meta.comparison){
                             $table.rows.$prop.$metric = $row
@@ -1153,7 +1249,9 @@ Function Format-MinMaxChart {
 
                     if (-not $meta.comparison) {
                         $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
-                    } else {
+                    } 
+                    else 
+                    {
                         $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.baseline = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
                         $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.test = @{"value" = $data.$prop.$sortKey.test.stats.$metric}
                     }
@@ -1167,11 +1265,12 @@ Function Format-MinMaxChart {
             $tables = $tables + $table
             return $tables
         }
-    } catch {
+    } 
+    catch 
+    {
         Write-Warning "Error at Format-MinMaxChart"
         Write-Error $_.Exception.Message
     }
-    
 }
 
 
@@ -1193,20 +1292,24 @@ Function Format-MinMaxChart {
 # HashTable[] - Array of HashTable objects which each store a table of formatted percentile data
 #
 ##
-Function Format-Percentiles {
+Function Format-Percentiles 
+{
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
         [Parameter()] [String] $TableTitle = ""
     )
-    try {
+    try 
+    {
         $tables = @()
         $data = $DataObj.data
         $meta = $DataObj.meta
         $sortProp = $meta.sortProp
         $baseTitle = $TableTitle
-        foreach ($prop in $data.Keys) {
-            foreach ($sortKey in $data.$prop.Keys | Sort) {
+        foreach ($prop in $data.Keys) 
+        {
+            foreach ($sortKey in $data.$prop.Keys | Sort) 
+            {
                 $note = ""
                 if ($sortProp) {
                     $note = " - $sortProp $sortKey"
@@ -1235,7 +1338,7 @@ Function Format-Percentiles {
                         "title" = "$prop Percentiles$note"
                         "yOffset" = 1
                         "xOffset" = 1
-                        "chartType" = 75
+                        "chartType" = $XLENUM.xlXYScatterLinesNoMarkers
                         "seriesSettings" = @{
                             1 = @{
                                 "color" = $BLUES[1]
@@ -1255,7 +1358,8 @@ Function Format-Percentiles {
                         }
                     }
                 }
-                if ($meta.comparison) {
+                if ($meta.comparison) 
+                {
                     $table.cols.$TableTitle.$prop = @{
                         "baseline" = 0
                         "% change" = 1
@@ -1282,9 +1386,11 @@ Function Format-Percentiles {
                 }
                 $row = 0
                 # Add row labels and fill data in table
-                foreach ($percentile in $data.$prop.$sortKey.baseline.percentiles.Keys | Sort) {
+                foreach ($percentile in $data.$prop.$sortKey.baseline.percentiles.Keys | Sort) 
+                {
                     $table.rows.percentiles.$percentile = $row
-                    if ($meta.comparison) {
+                    if ($meta.comparison) 
+                    {
                         $percentage = $data.$prop.$sortKey."% change".percentiles.$percentile
                         $percentage = "$percentage %"
                         $table.data.$TableTitle.$prop.baseline.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.baseline.percentiles.$percentile}
@@ -1297,7 +1403,9 @@ Function Format-Percentiles {
                             "Goal" = $meta.goal.$prop
                         }
                         $table.data.$TableTitle.$prop."% change".percentiles.$percentile = Select-Color @params
-                    } else {
+                    } 
+                    else 
+                    {
                         $table.data.$TableTitle.$prop.percentiles.$percentile = @{"value" = $data.$prop.$sortKey.baseline.percentiles.$percentile}
                     }
                     $row += 1
@@ -1311,7 +1419,9 @@ Function Format-Percentiles {
             }
         }
         return $tables  
-    } catch {
+    } 
+    catch 
+    {
         Write-Warning "Error at Format-Percentiles"
         Write-Error $_.Exception.Message
     }
@@ -1336,7 +1446,8 @@ Function Format-Percentiles {
 # HashTable[] - Array of HashTable objects which each store a table of formatted distribution data
 #
 ##
-Function Format-Distribution {
+Function Format-Distribution 
+{
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
@@ -1346,20 +1457,25 @@ Function Format-Distribution {
     
         [Parameter()] [Int] $SubSampleRate = 50
     )
-    try {
+    try 
+    {
         $meta = $DataObj.meta
         $modes = @("baseline")
-        if ($meta.comparison) {
+        if ($meta.comparison) 
+        {
             $modes += "test"
         }
         $tables = @()
         $originalTitle = $TableTitle
-        foreach ($mode in $modes) {
-            if ($tables.Count -gt 0) {
+        foreach ($mode in $modes) 
+        {
+            if ($tables.Count -gt 0) 
+            {
                 $tables += "NEW"
             }
             $label = ""
-            if ($modes.Count -gt 1) {
+            if ($modes.Count -gt 1) 
+            {
                 $label = "$mode -"
                 $TableTitle = "$label$originalTitle"
             }
@@ -1387,7 +1503,7 @@ Function Format-Distribution {
                     }
                 }
                 "chartSettings" = @{
-                    "chartType" = -4169
+                    "chartType" = $XLENUM.xlXYScatter
                     "yOffset" = 2
                     "xOffset" = 2
                     "title" = "$label Temporal Latency Distribution"
@@ -1411,14 +1527,17 @@ Function Format-Distribution {
             $i = 0
             $row = 0
             $NumSegments = $data[0].$Prop.Count / $SubSampleRate
-            while ($i -lt $NumSegments) {
+            while ($i -lt $NumSegments) 
+            {
                 [Array]$segmentData = @()
-                foreach ($entry in $data) {
+                foreach ($entry in $data) 
+                {
                     $segmentData += $entry[$Prop][($i * $SubSampleRate) .. ((($i + 1) * $SubSampleRate) - 1)]
                 }
                 $segmentData = $segmentData | Sort
                 $time = $i * $subSampleRate
-                if ($segmentData.Count -ge 10) {
+                if ($segmentData.Count -ge 10) 
+                {
                     $table.rows."Data Point".$row = $row
                     $table.rows."Data Point".($row + 1) = $row + 1
                     $table.rows."Data Point".($row + 2) = $row + 2
@@ -1435,7 +1554,9 @@ Function Format-Distribution {
                     $table.data.$TableTitle.$Prop."Data Point".($row + 3) = @{"value" = $segmentData[[int]((3 * $segmentData.Count) / 4)]}
                     $table.data.$TableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
                     $row += 5
-                } elseif ($segmentData.Count -ge 2) {
+                } 
+                elseif ($segmentData.Count -ge 2) 
+                {
                     $table.rows."Data Point".$row = $row
                     $table.rows."Data Point".($row + 1) = $row + 1
                     $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
@@ -1443,7 +1564,9 @@ Function Format-Distribution {
                     $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $segmentData[0]}
                     $table.data.$TableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[-1]}
                     $row += 2
-                } else {
+                } 
+                else 
+                {
                     $table.rows."Data Point".$row = $row
                     $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
                     $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $segmentData[0]}
@@ -1459,7 +1582,9 @@ Function Format-Distribution {
             $tables += $table
         }
         return $tables
-    } catch {
+    } 
+    catch 
+    {
         Write-Warning "Error at Format-Distribution"
         Write-Error $_.Exception.Message
     }
@@ -1485,20 +1610,30 @@ Function Format-Distribution {
 # HashTable - Object containing a cell's value and other settings
 #
 ##  
-Function Select-Color ($Cell, $TestVal, $BaseVal, $Goal) {
-    if ( $Goal -eq "increase") {
-        if ($TestVal -ge $BaseVal) {
+Function Select-Color ($Cell, $TestVal, $BaseVal, $Goal) 
+{
+    if ( $Goal -eq "increase") 
+    {
+        if ($TestVal -ge $BaseVal) 
+        {
             $Cell["fontColor"] = $GREEN
             $Cell["cellColor"] = $LIGHTGREEN
-        } else {
+        } 
+        else 
+        {
             $Cell["fontColor"] = $RED
             $Cell["cellColor"] = $LIGHTRED
         }
-    } else {
-        if ($TestVal -le $BaseVal) {
+    } 
+    else 
+    {
+        if ($TestVal -le $BaseVal) 
+        {
             $Cell["fontColor"] = $GREEN
             $Cell["cellColor"] = $LIGHTGREEN
-        } else {
+        } 
+        else 
+        {
             $Cell["fontColor"] = $RED
             $Cell["cellColor"] = $LIGHTRED
         }
@@ -1521,7 +1656,8 @@ Function Select-Color ($Cell, $TestVal, $BaseVal, $Goal) {
 # HashTable - Object containing statistical metric calculated over Arr
 #
 ## 
-Function Calculate-Stats ($Arr) {
+Function Calculate-Stats ($Arr) 
+{
     $measures = ($Arr | Measure -Average -Maximum -Minimum -Sum)
     $stats = @{
         "count" = $measures.Count
@@ -1539,14 +1675,20 @@ Function Calculate-Stats ($Arr) {
     $mode = $null
     $modeCount = 0
     $Arr = $Arr | Sort
-    foreach ($val in $Arr) {
-        if ($val -ne $curVal) {
+    foreach ($val in $Arr) 
+    {
+        if ($val -ne $curVal) 
+        {
             $curVal = $val
             $curCount = 1
-        } else {
+        } 
+        else 
+        {
             $curCount++ 
         }
-        if ($curCount -gt $modeCount) {
+
+        if ($curCount -gt $modeCount) 
+        {
             $mode = $val
             $modeCount = $curCount
         }
@@ -1561,9 +1703,11 @@ Function Calculate-Stats ($Arr) {
     $stats["variance"] = $squareDiffSum / ($N - 1)
     $stats["std err"] = $stats["std dev"] / [math]::Sqrt($N)
 
-    if ($N -gt 3) {
+    if ($N -gt 3) 
+    {
         $stats["kurtosis"] = (($N * ($N + 1))/( ($N - 1) * ($N - 2) * ($N - 3))) * ($quadDiffSum / [Math]::Pow($stats["variance"], 2)) - 3 * ([Math]::Pow($N - 1, 2) / (($N - 2) * ($N - 3)) )
-        foreach ($val in $Arr | Sort) { 
+        foreach ($val in $Arr | Sort) 
+        { 
             $cubeDiffSum += [Math]::Pow(($val - $measures.Average) / $stats["std dev"], 3) 
         }
         $stats["skewness"] = ($N / (($N - 1) * ($N - 2))) * $cubeDiffSum
@@ -1586,12 +1730,15 @@ Function Calculate-Stats ($Arr) {
 # int - Width of Tree
 #
 ##
-Function Get-TreeWidth ($Tree) {
-    if ($Tree.GetType().Name -eq "Int32") {
+Function Get-TreeWidth ($Tree) 
+{
+    if ($Tree.GetType().Name -eq "Int32") 
+    {
         return 1
     }
     $width = 0
-    foreach ($key in $Tree.Keys) {
+    foreach ($key in $Tree.Keys) 
+    {
         $width += [int](Get-TreeWidth -Tree $Tree[$key])
     }
     return $width
@@ -1611,12 +1758,15 @@ Function Get-TreeWidth ($Tree) {
 # int - Depth of Tree
 #
 ##
-Function Get-TreeDepth ($Tree){
-    if ($Tree.GetType().Name -eq "Int32") {
+Function Get-TreeDepth ($Tree)
+{
+    if ($Tree.GetType().Name -eq "Int32") 
+    {
         return 0
     }
     $depths = @()
-    foreach ($key in $Tree.Keys) {
+    foreach ($key in $Tree.Keys) 
+    {
         $depths = $depths + [int](Get-TreeDepth -Tree $Tree[$key])
     }
     return ($depths | Measure -Maximum).Maximum + 1
@@ -1637,7 +1787,8 @@ Function Get-TreeDepth ($Tree){
 # HashTable[] - Array of objects, sorted by property value
 #
 ##
-Function Sort-ByProp {
+Function Sort-ByProp 
+{
     param(
         [Parameter()]
         [PSObject] $Data,
@@ -1646,7 +1797,8 @@ Function Sort-ByProp {
         [string] $Prop
     )
 
-    if ($Data.length -eq 1) {
+    if ($Data.length -eq 1) 
+    {
         $sorted = @()
         $sorted = $sorted + $Data
         return $sorted
@@ -1660,20 +1812,28 @@ Function Sort-ByProp {
     $idx1 = 0
     $idx2 = 0
     
-    while ($idx1 -lt $arr1.length -and $idx2 -lt $arr2.length) {
-        if ($arr1[$idx1].$prop -le $arr2[$idx2].$prop) {
+    while ($idx1 -lt $arr1.length -and $idx2 -lt $arr2.length) 
+    {
+        if ($arr1[$idx1].$prop -le $arr2[$idx2].$prop) 
+        {
             $sorted = $sorted + $arr1[$idx1]
             $idx1 += 1
-        } else {
+        } 
+        else 
+        {
             $sorted = $sorted + $arr2[$idx2]
             $idx2 += 1
         }
     }
-    while ($idx1 -lt $arr1.length) {
+
+    while ($idx1 -lt $arr1.length) 
+    {
         $sorted = $sorted + $arr1[$idx1]
         $idx1 += 1
     }
-    while ($idx2 -lt $arr2.length) {
+
+    while ($idx2 -lt $arr2.length) 
+    {
         $sorted = $sorted + $arr2[$idx2]
         $idx2 += 1
     }
@@ -1701,7 +1861,8 @@ Function Sort-ByProp {
 # (String) - Name of saved file
 #
 ##
-Function Create-ExcelSheet {
+Function Create-ExcelSheet 
+{
     param (
         [Parameter(Mandatory=$true)] 
         [PSObject[]]$Tables,
@@ -1716,19 +1877,24 @@ Function Create-ExcelSheet {
         [string]$SavePath = $null
     )
 
-    if  ( (-not $SavePath) -and !( Test-Path -Path $SaveDir -PathType "Container" ) ) { 
+    if  ( (-not $SavePath) -and !( Test-Path -Path $SaveDir -PathType "Container" ) ) 
+    { 
         New-Item -Path $SaveDir -ItemType "Container" -ErrorAction Stop | Out-Null
     }
 
     $date = Get-Date -UFormat "%Y-%m-%d_%H-%M-%S"
-    if ($SavePath) {
+    if ($SavePath) 
+    {
         $excelFile = $SavePath
-    } else {
+    } 
+    else 
+    {
         $excelFile = "$SaveDir\$Tool-Report-$($date).xlsx"
     }
     $excelFile = $excelFile.Replace(" ", "_")
 
-    try {
+    try 
+    {
         $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
         $excelObject.Visible = $true
         $workbookObject = $excelObject.Workbooks.Add()
@@ -1736,8 +1902,10 @@ Function Create-ExcelSheet {
             
         [int]$rowOffset = 1
         [int] $chartNum = 1
-        foreach ($table in $Tables) {
-            if ($table -eq "NEW") {
+        foreach ($table in $Tables) 
+        {
+            if ($table -eq "NEW") 
+            {
                 $chartNum = 1
                 $worksheetObject.UsedRange.Columns.Autofit() | Out-Null
                 $worksheetObject = $workbookObject.worksheets.Add()
@@ -1745,27 +1913,31 @@ Function Create-ExcelSheet {
                 continue
             }
 
-            Fill-ColLabels -Worksheet $worksheetObject -cols $table["cols"] -startCol ($table["meta"]["rowLabelDepth"] + 1) -row $rowOffset | Out-Null
-            Fill-RowLabels -Worksheet $worksheetObject -rows $table["rows"] -startRow ($table["meta"]["colLabelDepth"] + $rowOffset) -col 1 | Out-Null
-            Fill-Data -Worksheet $worksheetObject -Data $table["data"] -Cols $table["cols"] -Rows $table["rows"] -StartCol ($table["meta"]["rowLabelDepth"] + 1) -StartRow ($table["meta"]["colLabelDepth"] + $rowOffset) | Out-Null
-            if ($table["chartSettings"]) {
+            Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) -row $rowOffset | Out-Null
+            Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) -col 1 | Out-Null
+            Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset) | Out-Null
+            if ($table.chartSettings) 
+            {
                 Create-Chart -Worksheet $worksheetObject -Table $table -StartCol 1 -StartRow $rowOffset -chartNum $chartNum | Out-Null
                 $chartNum += 1
             }
-            if ($table["meta"]["columnFormats"]){
-                for ($i = 0; $i -lt $table["meta"]["columnFormats"].Count; $i++) {
-                    if ($table["meta"]["columnFormats"][$i]) {
-                        $column = $worksheetObject.Range($worksheetObject.Cells($rowOffset + $table["meta"]["colLabelDepth"], 1 + $table["meta"]["rowLabelDepth"] + $i), $worksheetObject.Cells($rowOffset + $table["meta"]["colLabelDepth"] + $table["meta"]["dataHeight"] - 1, 1 + $table["meta"]["rowLabelDepth"] + $i))
+            if ($table.meta.columnFormats)
+            {
+                for ($i = 0; $i -lt $table.meta.columnFormats.Count; $i++) 
+                {
+                    if ($table.meta.columnFormats[$i]) 
+                    {
+                        $column = $worksheetObject.Range($worksheetObject.Cells($rowOffset + $table.meta.colLabelDepth, 1 + $table.meta.rowLabelDepth + $i), $worksheetObject.Cells($rowOffset + $table.meta.colLabelDepth + $table.meta.dataHeight - 1, 1 + $table.meta.rowLabelDepth + $i))
                         $column.select() | Out-Null
-                        $column.NumberFormat = $table["meta"]["columnFormats"][$i]
+                        $column.NumberFormat = $table.meta.columnFormats[$i]
                     }
                 }
             }
-            $selection = $worksheetObject.Range($worksheetObject.Cells($rowOffset, 1), $worksheetObject.Cells($rowOffset + $table["meta"]["colLabelDepth"] + $table["meta"]["dataHeight"] - 1, $table["meta"]["rowLabelDepth"] + $table["meta"]["dataWidth"]))
+            $selection = $worksheetObject.Range($worksheetObject.Cells($rowOffset, 1), $worksheetObject.Cells($rowOffset + $table.meta.colLabelDepth + $table.meta.dataHeight - 1, $table.meta.rowLabelDepth + $table.meta.dataWidth))
             $selection.select() | Out-Null
             $selection.BorderAround(1, 4) | Out-Null
 
-            $rowOffset += $table["meta"]["colLabelDepth"] + $table["meta"]["dataHeight"] + 1
+            $rowOffset += $table.meta.colLabelDepth + $table.meta.dataHeight + 1
         }
         
         $worksheetObject.UsedRange.Columns.Autofit() | Out-Null
@@ -1781,7 +1953,9 @@ Function Create-ExcelSheet {
         [System.GC]::WaitForPendingFinalizers() | Out-Null
 
         return [string]$excelFile
-    } catch {
+    } 
+    catch 
+    {
         Write-Warning "Error at Create-ExcelSheet"
         Write-Error $_.Exception.Message
     } 
@@ -1806,81 +1980,101 @@ Function Create-ExcelSheet {
 # None
 #
 ##
-Function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
+Function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) 
+{
     $chart = $Worksheet.Shapes.AddChart().Chart 
 
-    $width = $Table["meta"]["dataWidth"] + $Table["meta"]["rowLabelDepth"]
-    $height = $Table["meta"]["dataHeight"] + $Table["meta"]["colLabelDepth"]
-    if ($Table["chartSettings"]["yOffset"]) {
-        $height -= $Table["chartSettings"]["yOffset"]
-        $StartRow += $Table["chartSettings"]["yOffset"]
+    $width = $Table.meta.dataWidth + $Table.meta.rowLabelDepth
+    $height = $Table.meta.dataHeight + $Table.meta.colLabelDepth
+    if ($Table.chartSettings.yOffset) 
+    {
+        $height -= $Table.chartSettings.yOffset
+        $StartRow += $Table.chartSettings.yOffset
     }
-    if ($Table["chartSettings"]["xOffset"]) {
-        $width -= $Table["chartSettings"]["xOffset"]
-        $StartCol += $Table["chartSettings"]["xOffset"]
+    if ($Table.chartSettings.xOffset) 
+    {
+        $width -= $Table.chartSettings.xOffset
+        $StartCol += $Table.chartSettings.xOffset
     }
-    if ($Table["chartSettings"]["chartType"]) {
-        $chart.ChartType = $Table["chartSettings"]["chartType"]
+    if ($Table.chartSettings.chartType) 
+    {
+        $chart.ChartType = $Table.chartSettings.chartType
     }
     $chart.SetSourceData($Worksheet.Range($Worksheet.Cells($StartRow, $StartCol), $Worksheet.Cells($StartRow + $height - 1, $StartCol + $width - 1)))
     
-    if ($Table["chartSettings"]["plotBy"]) {
-        $chart.PlotBy = $Table["chartSettings"]["plotBy"]
+    if ($Table.chartSettings.plotBy) 
+    {
+        $chart.PlotBy = $Table.chartSettings.plotBy
     }
      
-    if ($Table["chartSettings"]["seriesSettings"]) {
-        foreach($seriesNum in $Table["chartSettings"]["seriesSettings"].Keys) {
-            if ($Table["chartSettings"]["seriesSettings"][$seriesNum]["hide"]) {
+    if ($Table.chartSettings.seriesSettings) {
+        foreach($seriesNum in $Table.chartSettings.seriesSettings.Keys) 
+        {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.hide) 
+            {
                 $chart.SeriesCollection($seriesNum).format.fill.ForeColor.TintAndShade = 1
                 $chart.SeriesCollection($seriesNum).format.fill.Transparency = 1
             }
-            if ($Table["chartSettings"]["seriesSettings"][$seriesNum]["color"]) {
-                $chart.SeriesCollection($seriesNum).Border.Color = $Table["chartSettings"]["seriesSettings"][$seriesNum]["color"]
+            if ($Table.chartSettings.seriesSettings.$seriesNum.color) 
+            {
+                $chart.SeriesCollection($seriesNum).Border.Color = $Table.chartSettings.seriesSettings.$seriesNum.color
             }
-            if ($Table["chartSettings"]["seriesSettings"][$seriesNum]["delete"]) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.delete) 
+            {
                 $chart.SeriesCollection($seriesNum).Delete()
             }
-            if ($Table["chartSettings"]["seriesSettings"][$seriesNum]["markerColor"]) {
-                $chart.SeriesCollection($seriesNum).MarkerBackgroundColor = $Table["chartSettings"]["seriesSettings"][$seriesNum]["markerColor"]
-                $chart.SeriesCollection($seriesNum).MarkerForegroundColor = $Table["chartSettings"]["seriesSettings"][$seriesNum]["markerColor"]
-                $chart.SeriesCollection($seriesNum).MarkerStyle = 8
+            if ($Table.chartSettings.seriesSettings.$seriesNum.markerColor) 
+            {
+                $chart.SeriesCollection($seriesNum).MarkerBackgroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerColor
+                $chart.SeriesCollection($seriesNum).MarkerForegroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerColor
+                $chart.SeriesCollection($seriesNum).MarkerStyle = $XLENUM.xlMarkerStyleCircle
             }
         }
     }
 
-    if ($Table["chartSettings"]["axisSettings"]) {
-        foreach($axisNum in $Table["chartSettings"]["axisSettings"].Keys) {
-            if ($Table["chartSettings"]["axisSettings"][$axisNum]["min"]) { 
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MinimumScale = $Table["chartSettings"]["axisSettings"][$axisNum]["min"]
+    if ($Table.chartSettings.axisSettings) 
+    {
+        foreach($axisNum in $Table.chartSettings.axisSettings.Keys) 
+        {
+            if ($Table.chartSettings.axisSettings.$axisNum.min) 
+            { 
+                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MinimumScale = $Table.chartSettings.axisSettings.$axisNum.min
             }
-            if ($Table["chartSettings"]["axisSettings"][$axisNum]["max"]) { 
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MaximumScale = $Table["chartSettings"]["axisSettings"][$axisNum]["max"]
+            if ($Table.chartSettings.axisSettings.$axisNum.max) 
+            { 
+                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MaximumScale = $Table.chartSettings.axisSettings.$axisNum.max
             }
-            if ($Table["chartSettings"]["axisSettings"][$axisNum]["logarithmic"]) {
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).scaleType = -4133
+            if ($Table.chartSettings.axisSettings.$axisNum.logarithmic) 
+            {
+                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).scaleType = $XLENUM.xlScaleLogarithmic
             }
-            if ($Table["chartSettings"]["axisSettings"][$axisNum]["title"]) {
+            if ($Table.chartSettings.axisSettings.$axisNum.title) 
+            {
                 $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).HasTitle = $true
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).AxisTitle.Caption = $Table["chartSettings"]["axisSettings"][$axisNum]["title"]
+                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).AxisTitle.Caption = $Table.chartSettings.axisSettings.$axisNum.title
             }
-            if ($Table["chartSettings"]["axisSettings"][$axisNum]["minorGridlines"]) {
+            if ($Table.chartSettings.axisSettings.$axisNum.minorGridlines) 
+            {
                 $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).HasMinorGridlines = $true
             }
-            if ($Table["chartSettings"]["axisSettings"][$axisNum]["majorGridlines"]) {
+            if ($Table.chartSettings.axisSettings.$axisNum.majorGridlines) 
+            {
                 $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).HasMajorGridlines = $true
             }
         }
     }
 
-    if ($Table["chartSettings"]["title"]) {
+    if ($Table.chartSettings.title) 
+    {
         $chart.HasTitle = $true
         $chart.ChartTitle.Caption = [string]$Table.chartSettings.title
     }
-    
-    if ($Table["chartSettings"]["hideLegend"]) {
+    if ($Table.chartSettings.hideLegend) 
+    {
         $chart.HasLegend = $false
     }
-    if ($Table["chartSettings"]["dataTable"]) {
+    if ($Table.chartSettings.dataTable) 
+    {
         $chart.HasDataTable = $true
     }
 
@@ -1906,22 +2100,28 @@ Function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
 # None
 #
 ##
-Function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
-    $Worksheet.Cells($Row, $Col).Borders.LineStyle = 1
-    if ($CellSettings.fontColor) {
+Function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) 
+{
+    $Worksheet.Cells($Row, $Col).Borders.LineStyle = $XLENUM.xlContinuous
+    if ($CellSettings.fontColor) 
+    {
         $Worksheet.Cells($Row, $Col).Font.Color = $CellSettings.fontColor
     }
-    if ($CellSettings.cellColor) {
+    if ($CellSettings.cellColor) 
+    {
         $Worksheet.Cells($Row, $Col).Interior.Color = $CellSettings.cellColor
     }
-    if ($CellSettings.bold) {
+    if ($CellSettings.bold) 
+    {
         $Worksheet.Cells($Row, $Col).Font.Bold = $true
     }
-    if ($CellSettings.center) {
-        $Worksheet.Cells($Row, $Col).HorizontalAlignment = -4108
-        $Worksheet.Cells($Row, $Col).VerticalAlignment = -4108
+    if ($CellSettings.center) 
+    {
+        $Worksheet.Cells($Row, $Col).HorizontalAlignment = $XLENUM.xlHAlignCenter
+        $Worksheet.Cells($Row, $Col).VerticalAlignment = $XLENUM.xlHAlignCenter
     }
-    if ($CellSettings.value -ne $null) {
+    if ($CellSettings.value -ne $null) 
+    {
         $Worksheet.Cells($Row, $Col) = $CellSettings.value
     }
 }
@@ -1944,11 +2144,12 @@ Function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
 # None
 #
 ##
-Function Merge-Cells ($Worksheet, $Row1, $Col1, $Row2, $Col2) {
+Function Merge-Cells ($Worksheet, $Row1, $Col1, $Row2, $Col2) 
+{
     $cells = $Worksheet.Range($Worksheet.Cells($Row1, $Col1), $Worksheet.Cells($Row2, $Col2))
     $cells.Select()
     $cells.MergeCells = $true
-    $cells.Borders.LineStyle = 1
+    $cells.Borders.LineStyle = $XLENUM.xlContinuous
 }
 
 
@@ -1970,11 +2171,14 @@ Function Merge-Cells ($Worksheet, $Row1, $Col1, $Row2, $Col2) {
 # (int[]) - Tuple of integers capturing the column index range across which the just-drawn label spans
 #
 ##
-Function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
+Function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) 
+{
     $range = @(-1, -1)
-    foreach ($label in $Cols.Keys) {
-        if ($Cols[$label].GetType().Name -ne "Int32") {
-            $subRange = Fill-ColLabels -Worksheet $Worksheet -Cols $Cols[$label] -StartCol $StartCol -Row ($Row + 1)
+    foreach ($label in $Cols.Keys) 
+    {
+        if ($Cols.$label.GetType().Name -ne "Int32") 
+        {
+            $subRange = Fill-ColLabels -Worksheet $Worksheet -Cols $Cols.$label -StartCol $StartCol -Row ($Row + 1)
             Merge-Cells -Worksheet $Worksheet -Row1 $Row -Col1 $subRange[0] -Row2 $Row -Col2 $subRange[1] | Out-Null
             $cellSettings = @{
                 "value" = $label
@@ -1982,27 +2186,32 @@ Function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
                 "center" = $true
             }
             Fill-Cell -Worksheet $Worksheet -Row $Row -Col $subRange[0] -CellSettings $cellSettings | Out-Null
-            if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1)){
+            if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1))
+            {
                 $range[0] = $subRange[0]
             } 
-            if (($subRange[1] -gt $range[1]) -or ($range[0] -eq -1)) {
+            if (($subRange[1] -gt $range[1]) -or ($range[0] -eq -1)) 
+            {
                 $range[1] = $subRange[1]
             }
-        } else {
+        } 
+        else 
+        {
             $cellSettings = @{
                 "value" = $label
                 "bold" = $true
                 "center" = $true
             }
-            Fill-Cell $Worksheet -Row $Row -Col ($StartCol + $Cols[$label]) -CellSettings $cellSettings | Out-Null
-            if (($StartCol + $Cols[$label] -lt $range[0]) -or ($range[0] -eq -1)) {
-                $range[0] = $StartCol + $Cols[$label]
+            Fill-Cell $Worksheet -Row $Row -Col ($StartCol + $Cols.$label) -CellSettings $cellSettings | Out-Null
+            if (($StartCol + $Cols.$label -lt $range[0]) -or ($range[0] -eq -1)) 
+            {
+                $range[0] = $StartCol + $Cols.$label
             }
-            if (($StartCol + $Cols[$label] -gt $range[1]) -or ($range[1] -eq -1)) {
-                $range[1] = $StartCol + $Cols[$label]
+            if (($StartCol + $Cols.$label -gt $range[1]) -or ($range[1] -eq -1)) 
+            {
+                $range[1] = $StartCol + $Cols.$label
             }
         }    
-        
     }
     return $range
 }
@@ -2026,11 +2235,14 @@ Function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
 # (int[]) - Tuple of integers capturing the row index range across which the just-drawn label spans
 #
 ##
-Function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
+Function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) 
+{
     $range = @(-1, -1)
-    foreach ($label in $rows.Keys) {
-        if ($Rows[$label].GetType().Name -ne "Int32") {
-            $subRange = Fill-RowLabels -Worksheet $Worksheet -Rows $Rows[$label] -StartRow $StartRow -Col ($Col + 1)
+    foreach ($label in $rows.Keys) 
+    {
+        if ($Rows.$label.GetType().Name -ne "Int32") 
+        {
+            $subRange = Fill-RowLabels -Worksheet $Worksheet -Rows $Rows.$label -StartRow $StartRow -Col ($Col + 1)
             Merge-Cells -Worksheet $Worksheet -Row1 $subRange[0] -Col1 $Col -Row2 $subRange[1] -Col2 $Col | Out-Null
             $cellSettings = @{
                 "value" = $label
@@ -2038,24 +2250,30 @@ Function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
                 "center" = $true
             }
             Fill-Cell -Worksheet $Worksheet -Row $subRange[0] -Col $Col -CellSettings $cellSettings | Out-Null
-            if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1)){
+            if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1))
+            {
                 $range[0] = $subRange[0]
             } 
-            if (($subRange[1] -gt $range[1]) -or ($range[0] -eq -1)) {
+            if (($subRange[1] -gt $range[1]) -or ($range[0] -eq -1)) 
+            {
                 $range[1] = $subRange[1]
             }
-        } else {
+        } 
+        else 
+        {
             $cellSettings = @{
                 "value" = $label
                 "bold" = $true
                 "center" = $true
             }
-            Fill-Cell $Worksheet -Row ($StartRow + $Rows[$label]) -Col $Col -CellSettings $cellSettings | Out-Null
-            if (($StartRow + $Rows[$label] -lt $range[0]) -or ($range[0] -eq -1)) {
-                $range[0] = $StartRow + $Rows[$label]
+            Fill-Cell $Worksheet -Row ($StartRow + $Rows.$label) -Col $Col -CellSettings $cellSettings | Out-Null
+            if (($StartRow + $Rows.$label -lt $range[0]) -or ($range[0] -eq -1)) 
+            {
+                $range[0] = $StartRow + $Rows.$label
             }
-            if (($StartRow + $Rows[$label] -gt $range[1]) -or ($range[1] -eq -1)) {
-                $range[1] = $StartRow + $Rows[$label]
+            if (($StartRow + $Rows.$label -gt $range[1]) -or ($range[1] -eq -1)) 
+            {
+                $range[1] = $StartRow + $Rows.$label
             }
         }    
     }
@@ -2085,16 +2303,22 @@ Function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
 # None
 #
 ## 
-Function Fill-Data ($Worksheet, $Data, $Cols, $Rows, $StartCol, $StartRow) {
-    if($Cols.GetType().Name -eq "Int32" -and $Rows.GetType().Name -eq "Int32") {
+Function Fill-Data ($Worksheet, $Data, $Cols, $Rows, $StartCol, $StartRow) 
+{
+    if($Cols.GetType().Name -eq "Int32" -and $Rows.GetType().Name -eq "Int32") 
+    {
         Fill-Cell -Worksheet $Worksheet -Row ($StartRow + $Rows) -Col ($StartCol + $Cols) -CellSettings $Data
         return
     }  
-    foreach ($label in $Data.Keys) {
-        if ($Cols.getType().Name -ne "Int32") {
-            Fill-Data -Worksheet $Worksheet -Data $Data[$label] -Cols $Cols[$label] -Rows $Rows -StartCol $StartCol -StartRow $StartRow
-        } else {
-            Fill-Data -Worksheet $Worksheet -Data $Data[$label] -Cols $Cols -Rows $Rows[$label] -StartCol $StartCol -StartRow $StartRow
+    foreach ($label in $Data.Keys) 
+    {
+        if ($Cols.getType().Name -ne "Int32") 
+        {
+            Fill-Data -Worksheet $Worksheet -Data $Data.$label -Cols $Cols.$label -Rows $Rows -StartCol $StartCol -StartRow $StartRow
+        } 
+        else 
+        {
+            Fill-Data -Worksheet $Worksheet -Data $Data.$label -Cols $Cols -Rows $Rows.$label -StartCol $StartCol -StartRow $StartRow
         }
     }
 }
