@@ -42,8 +42,11 @@ Function Network-Data-Visualization
     Path to directory containing network performance data files to be consumed as test data. Providing
     this parameter runs the tool in comparison mode.
 
+    .PARAMETER SaveDir
+    Path to directory where excel file will be saved with an auto-generated name if no SavePath provided
+
     .PARAMETER SavePath
-    Path to directory where excel report should be saved
+    Path to exact file where excel file will be saved. 
 
     .SYNOPSIS
     Visualizes network performance data via excel tables and charts
@@ -68,7 +71,10 @@ Function Network-Data-Visualization
         [string]$TestDir=$null,
 
         [Parameter()]
-        [string]$SavePath = "$home\Documents\PSreports"
+        [string]$SaveDir = "$home\Documents\PSreports",
+
+        [Parameter()]
+        [string]$SavePath = $none
     )
     
     $ErrorActionPreference = "Stop"
@@ -115,7 +121,7 @@ Function Network-Data-Visualization
     }
 
     $tables += Format-Percentiles -DataObj $processedData -TableTitle $tool
-    $fileName = Create-ExcelSheet -Tables $tables -ExcelFileName "$tool Report" -SavePath $SavePath
+    $fileName = Create-ExcelSheet -Tables $tables -SaveDir $SaveDir -Tool $tool -SavePath $SavePath
 
     Write-Host "Created report at $filename"
 }
@@ -1715,8 +1721,11 @@ Function Create-ExcelSheet {
     }
 
     $date = Get-Date -UFormat "%Y-%m-%d_%H-%M-%S"
-
-    $excelFile = "$SaveDir\$FileName-$($date).xlsx"
+    if ($SavePath) {
+        $excelFile = $SavePath
+    } else {
+        $excelFile = "$SaveDir\$Tool-Report-$($date).xlsx"
+    }
     $excelFile = $excelFile.Replace(" ", "_")
 
     try {
