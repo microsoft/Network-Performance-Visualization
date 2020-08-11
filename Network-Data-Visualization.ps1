@@ -78,7 +78,10 @@ Function Network-Data-Visualization
         [string]$SaveDir = "$home\Documents\PSreports",
 
         [Parameter()]
-        [string]$SavePath = $none
+        [string]$SavePath = $none,
+
+        [Parameter(ParameterSetName = "LATTE")]
+        [int]$SubsampleRate = 50
     )
     
     Init-XLENUM
@@ -121,7 +124,7 @@ Function Network-Data-Visualization
     } 
     elseif (@("LATTE") -contains $tool ) 
     {
-        $tables += Format-Distribution -DataObj $processedData -TableTitle $tool -SubSampleRate 50
+        $tables += Format-Distribution -DataObj $processedData -TableTitle $tool -SubSampleRate $SubsampleRate
         $tables += "NEW"
         $tables += Format-Stats -DataObj $processedData -TableTitle $tool
     }
@@ -1088,8 +1091,8 @@ Function Format-Quartiles
             $table.meta.dataHeight = Get-TreeWidth $table.rows
             $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
             $tables = $tables + $table
-            return $tables
         }
+        return $tables
     } 
     catch 
     {
@@ -1263,8 +1266,8 @@ Function Format-MinMaxChart
             $table.meta.dataHeight = Get-TreeWidth $table.rows
             $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
             $tables = $tables + $table
-            return $tables
         }
+        return $tables
     } 
     catch 
     {
