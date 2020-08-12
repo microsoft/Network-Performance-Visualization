@@ -16,7 +16,7 @@ $Percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97
                                          99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
 # Interface ---------------------------------------------------------------------------------------
 
-Function Network-Data-Visualization 
+Function Network-Performance-Visualization 
 {
     <#
     .Description
