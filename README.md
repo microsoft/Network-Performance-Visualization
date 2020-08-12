@@ -4,7 +4,7 @@ Network-Data-Visualization is a tool used to visualize the data produced by vari
 # Usage
 For help and options when running this command directly, use:
 ```PowerShell
-Get-Help Network-Data-Visualization
+Get-Help Network-Performance-Visualization
 ```
 # Contributing
 
