@@ -1,6 +1,6 @@
 Set-ExecutionPolicy -ExecutionPolicy  ByPass
 
-$MBTOGB = 1 / 1024
+$MBTOGB = 1 / 1000
 $BTOGB = 1 / (1024 * 1024 * 1024) 
 
 $LIGHTGREEN = 10416289
@@ -11,6 +11,8 @@ $BLUES = @(10249511, 14058822, 16758932)
 $ORANGES = @(294092, 1681916, 6014716)
 
 $XLENUM = New-Object -TypeName PSObject
+
+$MINCOLUMNWIDTH = 7.0
 
 $Percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
                                          99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
@@ -108,19 +110,25 @@ Function New-Visualization {
 
     [Array] $tables = @() 
     if (@("NTTTCP", "CTStraffic") -contains $tool) {
+        $tables += "Raw Data"
         $tables += Format-RawData -DataObj $processedData -TableTitle $tool
-        $tables += "NEW"
+        $tables += "Stats"
         $tables += Format-Stats -DataObj $processedData -TableTitle $tool -Metrics @("min", "mean", "max", "std dev")
         $tables += Format-Quartiles -DataObj $processedData -TableTitle $tool
         $tables += Format-MinMaxChart -DataObj $processedData -TableTitle $tool
-        $tables += "NEW" 
     } 
     elseif (@("LATTE") -contains $tool ) {
+        if ($processedData.meta.comparison) {
+            $tables += "Raw Data - Baseline" 
+        } else {
+            $tables += "Raw Data" 
+        }
+        
         $tables += Format-Distribution -DataObj $processedData -TableTitle $tool -SubSampleRate $SubsampleRate
-        $tables += "NEW"
+        $tables += "Stats"
         $tables += Format-Stats -DataObj $processedData -TableTitle $tool
     }
-
+    $tables += "Percentiles" 
     $tables += Format-Percentiles -DataObj $processedData -TableTitle $tool
     $fileName = Create-ExcelFile -Tables $tables -SaveDir $SaveDir -Tool $tool -SavePath $SavePath
 
@@ -218,7 +226,7 @@ Function Parse-Files {
                     "cycles" = "decrease"
                 }
                 "format" = @{
-                    "throughput" = "0.0"
+                    "throughput" = "0.00"
                     "cycles" = "0.00"
                     "% change" = "+#.0%;-#.0%;0.0%"
                 }
@@ -289,7 +297,7 @@ Function Parse-Files {
                     "throughput" = "increase"
                 }
                 "format" = @{
-                    "throughput" = "0.0"
+                    "throughput" = "0.00"
                     "% change" = "+#.0%;-#.0%;0.0%"
                 }
                 "sortProp" = "sessions"
@@ -322,7 +330,7 @@ Function Parse-NTTTCP ([string] $FileName) {
     [XML]$file = Get-Content $FileName
 
     [decimal] $cycles = $file.ChildNodes.cycles.'#text'
-    [decimal] $throughput = $MBTOGB * [decimal]$file.ChildNodes.throughput[0].'#text'
+    [decimal] $throughput = $MBTOGB * [decimal]$file.ChildNodes.throughput[1].'#text'
     [int] $sessions = $file.ChildNodes.parameters.max_active_threads
 
     $dataEntry = @{
@@ -572,7 +580,7 @@ Function Format-RawData {
                 "colLabelDepth" = 1
                 "rowLabelDepth" = 1
                 "dataWidth" = 2
-                "dataHeight" = 3
+                "dataHeight" = 3 
             }
             "rows" = @{
                 " " = 0
@@ -647,6 +655,7 @@ Function Format-RawData {
                 }
                 "meta" = @{
                     "columnFormats" = @()
+                    "leftAlign" = [Array] @(2)
                 }
                 "data"  = @{
                     $TableTitle = @{}
@@ -1101,26 +1110,32 @@ Function Format-MinMaxChart {
                     1 = @{
                         "color" = $BLUES[2]
                         "markerColor" = $BLUES[2]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                     2 = @{
                         "color" = $ORANGES[2]
                         "markerColor" = $ORANGES[2]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                     3 = @{
                         "color" = $BLUES[1]
                         "markerColor" = $BLUES[1]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                     4 = @{
                         "color" = $ORANGES[1]
                         "markerColor" = $ORANGES[1]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                     5 = @{
                         "color" = $BLUES[0]
                         "markerColor" = $BLUES[0]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                     6 = @{
                         "color" = $ORANGES[0]
                         "markerColor" = $ORANGES[0]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                 }
             } 
@@ -1129,14 +1144,17 @@ Function Format-MinMaxChart {
                     1 = @{
                         "color" = $BLUES[2]
                         "markerColor" = $BLUES[2]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                     2 = @{
                         "color" = $BLUES[1]
                         "markerColor" = $BLUES[1]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                     3 = @{
                         "color" = $BLUES[0]
                         "markerColor" = $BLUES[0]
+                        "markerStyle" = $XLENUM.xlMarkerStyleCircle
                     }
                 }
             }
@@ -1378,7 +1396,7 @@ Function Format-Distribution {
         $originalTitle = $TableTitle
         foreach ($mode in $modes) {
             if ($tables.Count -gt 0) {
-                $tables += "NEW"
+                $tables += "Raw Data - Test"
             }
             $label = ""
             if ($modes.Count -gt 1) {
@@ -1426,6 +1444,24 @@ Function Format-Distribution {
                             "min" = 10
                         }
                     }
+                }
+            }
+
+            if ($mode -eq "baseline") {
+                $table.chartSettings.seriesSettings = @{
+                    1 = @{
+                            "markerStyle" = $XLENUM.xlMarkerStyleCircle
+                            "markerBackgroundColor" = $BLUES[2]
+                            "markerForegroundColor" = $BLUES[1]
+                        }
+                }
+            } else {
+                $table.chartSettings.seriesSettings = @{
+                    1 = @{
+                            "markerStyle" = $XLENUM.xlMarkerStyleCircle
+                            "markerBackgroundColor" = $ORANGES[2]
+                            "markerForegroundColor" = $ORANGES[1]
+                        }
                 }
             }
 
@@ -1770,11 +1806,22 @@ Function Create-ExcelFile {
             
         [int]$rowOffset = 1
         [int] $chartNum = 1
+        $first = $true
         foreach ($table in $Tables) {
-            if ($table -eq "NEW") {
+            if ($table.GetType().Name -eq "string") {
+                if ($first) {
+                    $first = $false
+                } else {
+                    $worksheetObject.UsedRange.Columns.Autofit() | Out-Null
+                    foreach ($column in $worksheetObject.UsedRange.Columns) {
+                        if ($column.ColumnWidth -lt $MINCOLUMNWIDTH) {
+                            $column.ColumnWidth = $MINCOLUMNWIDTH
+                        }
+                    }
+                    $worksheetObject = $workbookObject.worksheets.Add()
+                }
+                $worksheetObject.Name = $table
                 $chartNum = 1
-                $worksheetObject.UsedRange.Columns.Autofit() | Out-Null
-                $worksheetObject = $workbookObject.worksheets.Add()
                 [int]$rowOffset = 1
                 continue
             }
@@ -1793,6 +1840,13 @@ Function Create-ExcelFile {
                         $column.select() | Out-Null
                         $column.NumberFormat = $table.meta.columnFormats[$i]
                     }
+                }
+            }
+            if ($table.meta.leftAlign) {
+                foreach ($col in $table.meta.leftAlign) {
+                    $selection = $worksheetObject.Range($worksheetObject.Cells($rowOffset, $col), $worksheetObject.Cells($rowOffset + $table.meta.colLabelDepth + $table.meta.dataHeight - 1, $col))
+                    $selection.select() | Out-Null
+                    $selection.HorizontalAlignment = $XLENUM.xlHAlignLeft
                 }
             }
             $selection = $worksheetObject.Range($worksheetObject.Cells($rowOffset, 1), $worksheetObject.Cells($rowOffset + $table.meta.colLabelDepth + $table.meta.dataHeight - 1, $table.meta.rowLabelDepth + $table.meta.dataWidth))
@@ -1875,10 +1929,18 @@ Function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
             if ($Table.chartSettings.seriesSettings.$seriesNum.delete) {
                 $chart.SeriesCollection($seriesNum).Delete()
             }
+            if ($Table.chartSettings.seriesSettings.$seriesNum.markerStyle) {
+                $chart.SeriesCollection($seriesNum).MarkerStyle = $Table.chartSettings.seriesSettings.$seriesNum.markerStyle
+            }
+            if ($Table.chartSettings.seriesSettings.$seriesNum.markerBackgroundColor) {
+                $chart.SeriesCollection($seriesNum).MarkerBackgroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerBackgroundColor
+            }
+            if ($Table.chartSettings.seriesSettings.$seriesNum.markerForegroundColor) {
+                $chart.SeriesCollection($seriesNum).MarkerForegroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerForegroundColor
+            }
             if ($Table.chartSettings.seriesSettings.$seriesNum.markerColor) {
                 $chart.SeriesCollection($seriesNum).MarkerBackgroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerColor
                 $chart.SeriesCollection($seriesNum).MarkerForegroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerColor
-                $chart.SeriesCollection($seriesNum).MarkerStyle = $XLENUM.xlMarkerStyleCircle
             }
         }
     }
