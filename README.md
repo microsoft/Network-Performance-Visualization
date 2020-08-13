@@ -2,7 +2,7 @@
 Network-Data-Visualization is a tool used to visualize the data produced by various network performance analysis tools. Currently, the project supports NTTTCP, LATTE, and CTStraffic. 
 # Installation
 ## Manual Installation
-Download this repo to your machine, and then move the Network-Performance-Visualization folder to C:\Program Files\WindowsPowerShell\Modules. After this run the following command:
+Download this repo to your machine, and then move the Network-Performance-Visualization folder to C:\Program Files\WindowsPowerShell\Modules. After moving the folder, run the following command:
 ```PowerShell
 Install-Module Network-Performance-Visualization
 ```
