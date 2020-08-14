@@ -12,9 +12,10 @@ Get-Module -ListAvailable
 ```
 and checking that `Network-Performance-Visualization` is listed among the available modules.
 # Usage
+The `Network-Performance-Visualization` module exports one command called `New-Visualization`.  
 For help and options when running this command directly, use:
 ```PowerShell
-Get-Help Network-Performance-Visualization
+Get-Help New-Visualization
 ```
 # Contributing
 
