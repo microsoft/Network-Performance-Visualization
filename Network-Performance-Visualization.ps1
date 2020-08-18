@@ -689,6 +689,7 @@ function Format-RawData {
             }
             $col = 0
             $row = 0
+
             foreach ($entry in $data) {
                 $sortKey = $entry.$sortProp
 
@@ -731,7 +732,7 @@ function Format-RawData {
                         $table.data.$TableTitle.$sortKey.baseline.$prop.$filename = @{
                             "value" = $entry.$prop
                         }
-                    } 
+                    }
                     else {
                         $table.data.$TableTitle.$sortKey.test.$prop.$filename = @{
                             "value" = $entry.$prop
@@ -866,6 +867,7 @@ function Format-Stats {
                         $table.rows.$prop.$metric = $row
                         $row += 1
                     }
+
                     if (-not $meta.comparison) {
                         $table.data.$TableTitle.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
                     } 
@@ -881,11 +883,13 @@ function Format-Stats {
                             "BaseVal" = $data.$prop.$sortKey.baseline.stats.$metric
                             "Goal" = $meta.goal.$prop
                         }
-                        if (@("std dev", "variance", "kurtosis", "std err", "range") -contains $metric) {
+
+                        # Color % change cell if necessary
+                        if (@("std dev", "variance", "std err", "range") -contains $metric) {
                             $params.goal = "decrease"
                             $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
                         } 
-                        elseif ( -not (@("sum", "count") -contains $metric)) {
+                        elseif ( -not (@("sum", "count", "kurtosis", "skewness") -contains $metric)) {
                             $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
                         }
                     }
@@ -934,6 +938,7 @@ function Format-Quartiles {
         $data = $DataObj.data
         $meta = $DataObj.meta
         $sortProp = $meta.sortProp
+
         foreach ($prop in $data.Keys) { 
             $format = $meta.format.$prop
             $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop)
@@ -1009,8 +1014,9 @@ function Format-Quartiles {
                 }
             }
         
-            $row = 0
+            
             # Add row labels and fill data in table
+            $row = 0
             foreach ($sortKey in $data.$prop.Keys | Sort) {
                 if (-not $meta.comparison) {
                     $table.rows.$prop.$sortProp.$sortKey = $row
@@ -1290,12 +1296,15 @@ function Format-Percentiles {
         $sortProp = $meta.sortProp
         $baseTitle = $TableTitle
         foreach ($prop in $data.Keys) {
-            foreach ($sortKey in $data.$prop.Keys | Sort) { 
-                $note = ""
+            foreach ($sortKey in $data.$prop.Keys | Sort) {
                 if ($sortProp) {
-                    $note = " - $sortProp $sortKey"
-                    $TableTitle = "$baseTitle$note"
+                    $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles - $sortKey $sortProp")
+                    $TableTitle = "$baseTitle - $sortKey $sortProp"
+                } else {
+                    $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles")
+                    $TableTitle = "$baseTitle"
                 }
+                
                 $table = @{
                     "rows" = @{
                         "percentiles" = @{}
@@ -1317,7 +1326,7 @@ function Format-Percentiles {
                         }
                     }
                     "chartSettings"= @{
-                        "title" = "$prop Percentiles$note"
+                        "title" = $chartTitle
                         "yOffset" = 1
                         "xOffset" = 1
                         "chartType" = $XLENUM.xlXYScatterLinesNoMarkers
