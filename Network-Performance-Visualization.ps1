@@ -110,7 +110,7 @@ function New-Visualization {
         $testRaw = Parse-Files -Tool $tool -DirName $TestDir
     } 
 
-    $processedData = Process-Data -BaselineDataObj $baselineRaw -TestDataObj $testRaw
+    $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw
 
     [Array] $tables = @() 
     if (@("NTTTCP", "CTStraffic") -contains $tool) {
@@ -456,32 +456,32 @@ function Parse-LATTE ([string] $FileName) {
 ##
 function Process-Data {
     param (
-        [Parameter(Mandatory=$true)] [PSobject[]] $BaselineDataObj,
-        [Parameter()] [PSobject[]] $TestDataObj
+        [Parameter(Mandatory=$true)] [PSobject[]] $BaselineRawData,
+        [Parameter()] [PSobject[]] $TestRawData
     )
     try {
         $processedDataObj = @{
-            "meta" = $BaselineDataObj.meta
+            "meta" = $BaselineRawData.meta
             "data" = @{}
             "rawData" = @{
-                "baseline" = $BaselineDataObj.data
+                "baseline" = $BaselineRawData.data
             }
         }
-        if ($TestDataObj) {
+        if ($TestRawData) {
             $processedDataObj.meta.comparison = $true
-            $processedDataObj.rawData.test = $TestDataObj.data
+            $processedDataObj.rawData.test = $TestRawData.data
         }
 
-        $sortProp = $BaselineDataObj.meta.sortProp
-        foreach ($prop in ([Array]$BaselineDataObj.data)[0].Keys) {
-            if (($prop -eq $BaselineDataObj.meta.sortProp) -or ($BaselineDataObj.meta.noTable -contains $prop)) {
+        $sortProp = $BaselineRawData.meta.sortProp
+        foreach ($prop in ([Array]$BaselineRawData.data)[0].Keys) {
+            if (($prop -eq $BaselineRawData.meta.sortProp) -or ($BaselineRawData.meta.noTable -contains $prop)) {
                 continue
             }
 
             # Organize baseline data by sortProp values
             $processedDataObj.data.$prop = @{}
             $modes = @("baseline")
-            foreach($item in $BaselineDataObj.data) {
+            foreach($item in $BaselineRawData.data) {
                 $sortKey = "allData"
                 if ($sortProp) {
                     $sortKey = $item.$sortProp 
@@ -492,7 +492,7 @@ function Process-Data {
                             "orderedData" = @()
                         }
                     }
-                    if ($TestDataObj) {
+                    if ($TestRawData) {
                         $processedDataObj.data.$prop.$sortKey.test = @{
                             "orderedData" = @()
                         }
@@ -503,9 +503,9 @@ function Process-Data {
             }
 
             # Organize test data by sortProp values, if test data is provided
-            if ($TestDataObj) {
+            if ($TestRawData) {
                 $modes += "test"
-                foreach ($item in $TestDataObj.data) {
+                foreach ($item in $TestRawData.data) {
                     $sortKey = "allData"
                     if ($sortProp) {
                         $sortKey = $item.$sortProp 
@@ -545,7 +545,7 @@ function Process-Data {
                         }
                     }
                 } 
-                if ($TestDataObj) {
+                if ($TestRawData) {
                     $processedDataObj.data.$prop.$sortKey."% change".stats = @{}
                     $processedDataObj.data.$prop.$sortKey."% change".percentiles = @{}
                     if ($processedDataObj.data.$prop.$sortKey.test.stats.Keys.Count -eq $processedDataObj.data.$prop.$sortKey.baseline.stats.Keys.Count -and $processedDataObj.data.$prop.$sortKey.test.stats.Keys.Count -ne 0) {
@@ -560,7 +560,7 @@ function Process-Data {
                         }
                     }
                     
-                } 
+                }
             }
         }
         return $processedDataObj
@@ -1567,7 +1567,7 @@ function Format-Distribution {
                 }
                 $segmentData = $segmentData | Sort
                 $time = $i * $subSampleRate
-                if ($segmentData.Count -ge 10) {
+                if ($segmentData.Count -ge 5) {
                     $table.rows."Data Point".$row = $row
                     $table.rows."Data Point".($row + 1) = $row + 1
                     $table.rows."Data Point".($row + 2) = $row + 2
@@ -1585,22 +1585,14 @@ function Format-Distribution {
                     $table.data.$TableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
                     $row += 5
                 } 
-                elseif ($segmentData.Count -ge 2) {
-                    $table.rows."Data Point".$row = $row
-                    $table.rows."Data Point".($row + 1) = $row + 1
-                    $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
-                    $table.data.$TableTitle."Time Segment"."Data Point".($row + 1) = @{"value" = $time}
-                    $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $segmentData[0]}
-                    $table.data.$TableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[-1]}
-                    $row += 2
-                } 
                 else {
-                    $table.rows."Data Point".$row = $row
-                    $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
-                    $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $segmentData[0]}
-                    $row += 1
+                    foreach ($sample in $segmentData) {
+                        $table.rows."Data Point".$row = $row
+                        $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
+                        $table.data.$TableTitle.$Prop."Data Point".$row = @{"value" = $sample}
+                        $row++
+                    }
                 }
-                $i += 1
             }
             $table.meta.dataWidth = Get-TreeWidth $table.cols
             $table.meta.colLabelDepth = Get-TreeDepth $table.cols
@@ -2101,11 +2093,9 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
         $chart.HasTitle = $true
         $chart.ChartTitle.Caption = [string]$Table.chartSettings.title
     }
-    if ($Table.chartSettings.hideLegend) {
-        $chart.HasLegend = $false
-    }
     if ($Table.chartSettings.dataTable) {
         $chart.HasDataTable = $true
+        $chart.HasLegend = $false
     }
 
     $Worksheet.Shapes.Item("Chart " + $chartNum ).top = $Worksheet.Cells($StartRow, $StartCol + $width + 1).top
