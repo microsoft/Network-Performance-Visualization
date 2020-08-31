@@ -62,7 +62,7 @@ function Process-Data {
                     if ($processedDataObj.data.$prop.$sortKey.$mode.orderedData) {
                         Fill-Metrics -DataObj $processedDataObj -Property $prop -SortKey $sortKey -Mode $mode
                     }
-                    elseif ($processedDataObj.data.$prop.$sortKey.$mode.histogram) {
+                    if ($processedDataObj.data.$prop.$sortKey.$mode.histogram) {
                         Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -SortKey $sortKey -Mode $mode
 
                     }
@@ -95,7 +95,7 @@ function Percentiles-FromHistogram ($DataObj, $Property, $SortKey, $Mode) {
         $cdf.$bucket = 100 * ($cdf.$bucket / $sumSoFar)
     }
 
-    $DataObj.data.$Property.$SortKey.$Mode.percentiles = @{}
+    $DataObj.data.$Property.$SortKey.$Mode.percentilesHist = @{}
     
     $j = 0
     $i = 0
@@ -106,7 +106,7 @@ function Percentiles-FromHistogram ($DataObj, $Property, $SortKey, $Mode) {
         }
 
         if ($i -eq 0) {
-            $DataObj.data.$Property.$SortKey.$Mode.percentiles.($Percentiles[$j]) = $buckets[$i]
+            $DataObj.data.$Property.$SortKey.$Mode.percentilesHist.($Percentiles[$j]) = $buckets[$i]
         } 
         else {
             $lowerVal    = $cdf.($buckets[$i - 1])
@@ -116,7 +116,7 @@ function Percentiles-FromHistogram ($DataObj, $Property, $SortKey, $Mode) {
             
             $dist = ($Percentiles[$j] - $lowerVal) / ($upperVal - $lowerVal)
             
-            $DataObj.data.$Property.$SortKey.$Mode.percentiles.($Percentiles[$j]) = ($dist * $upperBucket) + ((1 - $dist) * $lowerBucket)
+            $DataObj.data.$Property.$SortKey.$Mode.percentilesHist.($Percentiles[$j]) = ($dist * $upperBucket) + ((1 - $dist) * $lowerBucket)
         }
 
         $j++ 
@@ -126,7 +126,7 @@ function Percentiles-FromHistogram ($DataObj, $Property, $SortKey, $Mode) {
 
 function Calculate-PercentChange ($DataObj, $Property, $SortKey) {
     $DataObj.data.$Property.$SortKey."% change" = @{}
-    foreach ($metricSet in @("stats", "percentiles")) {
+    foreach ($metricSet in @("stats", "percentiles", "percentilesHist")) {
         if (-not $DataObj.data.$Property.$SortKey.baseline.$metricSet) {
             continue
         }

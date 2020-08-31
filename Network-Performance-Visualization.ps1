@@ -55,10 +55,7 @@ function New-Visualization {
         [switch]$LATTE,
 
         [Parameter(Mandatory=$true, ParameterSetName="CTStraffic")]
-        [switch]$CTStraffic, 
-
-        [Parameter(Mandatory=$false, ParameterSetName="LATTE")]
-        [switch]$Raw,
+        [switch]$CTStraffic,
 
         [Parameter(Mandatory=$true, ParameterSetName = "NTTTCP")]
         [Parameter(Mandatory=$true, ParameterSetName = "LATTE")]
@@ -89,9 +86,6 @@ function New-Visualization {
     } 
     elseif ($LATTE) {
         $tool = "LATTE"
-        if ($Raw) {
-            $tool += " RAW"
-        }
     } 
     elseif ($CTStraffic) {
         $tool = "CTStraffic"
@@ -110,25 +104,13 @@ function New-Visualization {
     if (@("NTTTCP", "CTStraffic") -contains $tool) {
         $tables += "Raw Data"
         $tables += Format-RawData -DataObj $processedData -TableTitle $tool
-        $tables += "Stats"
         $tables += Format-Stats -DataObj $processedData -TableTitle $tool -Metrics @("min", "mean", "max", "std dev")
         $tables += Format-Quartiles -DataObj $processedData -TableTitle $tool
         $tables += Format-MinMaxChart -DataObj $processedData -TableTitle $tool
     } 
-    elseif (@("LATTE RAW") -contains $tool ) {
-        if ($processedData.meta.comparison) {
-            $tables += "Raw Data - Baseline" 
-        } 
-        else {
-            $tables += "Raw Data" 
-        }
-        
-        $tables += Format-Distribution -DataObj $processedData -TableTitle $tool -SubSampleRate $SubsampleRate
-        $tables += "Stats"
+    elseif (@("LATTE") -contains $tool ) {
+        $tables += Format-Distribution -DataObj $processedData -Title $tool -SubSampleRate $SubsampleRate
         $tables += Format-Stats -DataObj $processedData -TableTitle $tool
-    } 
-    elseif (@("LATTE") -contains $tool) {
-        $tables += "Histogram"
         $tables += Format-Histogram -DataObj $processedData -TableTitle $tool
     } 
     $tables  += "Percentiles" 
