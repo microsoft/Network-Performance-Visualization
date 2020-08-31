@@ -237,13 +237,13 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
     if ($Table.chartSettings.axisSettings) {
         foreach($axisNum in $Table.chartSettings.axisSettings.Keys) {
             if ($Table.chartSettings.axisSettings.$axisNum.min) { 
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MinimumScale = $Table.chartSettings.axisSettings.$axisNum.min
+                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MinimumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.min
             }
             if ($Table.chartSettings.axisSettings.$axisNum.tickLabelSpacing) {
-                $Worksheet.chartobjects($chartNum).chart.Axes(1).TickLabelSpacing = $Table.chartSettings.axisSettings.$axisNum.tickLabelSpacing
+                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).TickLabelSpacing = $Table.chartSettings.axisSettings.$axisNum.tickLabelSpacing
             }
             if ($Table.chartSettings.axisSettings.$axisNum.max) { 
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MaximumScale = $Table.chartSettings.axisSettings.$axisNum.max
+                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MaximumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.max
             }
             if ($Table.chartSettings.axisSettings.$axisNum.logarithmic) {
                 $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).scaleType = $XLENUM.xlScaleLogarithmic

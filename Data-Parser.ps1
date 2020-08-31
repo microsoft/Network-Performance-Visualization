@@ -71,47 +71,12 @@ function Parse-Files {
 
         return $rawData
     } 
-    elseif ($Tool -eq "LATTE RAW") {
-        [Array] $dataEntries = @() 
-        foreach ($file in $files) {
-            $fileName = $file.FullName
-            try {
-                $dataEntry = Parse-LATTE -FileName $fileName
-            } 
-            catch {
-                Write-Warning "Error at Parse-LATTE: failed to parse file $fileName"
-                Write-Error $_.Exception.Message
-            }
-            if ($dataEntry) {
-                $dataEntries += ,$dataEntry
-            }
-        }
-
-        $rawData = @{
-            "meta" = @{
-                "units" = @{
-                    "latency"  = "us"
-                }
-                "goal" = @{
-                    "latency"  = "decrease"
-                }
-                "format" = @{
-                    "latency"  = "#.0"
-                    "% change" = "+#.0%;-#.0%;0.0%"
-                }
-                "noTable" = [Array]@("filename")
-            }
-            "data" = $dataEntries
-        }
-
-        return $rawData
-    } 
     elseif ($Tool -eq "LATTE") {
         [Array] $dataEntries = @() 
         foreach ($file in $files) {
             $fileName = $file.FullName
             try {
-                $dataEntry = Parse-LATTE-Summary -FileName $fileName
+                $dataEntry = Parse-LATTE -FileName $fileName
             } 
             catch {
                 Write-Warning "Error at Parse-LATTE: failed to parse file $fileName"
@@ -286,14 +251,56 @@ function Parse-CTStraffic ([string] $Filename) {
 function Parse-LATTE ([string] $FileName) {
     $file = Get-Content $FileName
 
-    [Array] $latency = @()
-    foreach ($line in $file) {
-        $latency += ,[int]$line
+    $dataEntry = @{
+        "filename" = $FileName
     }
 
-    $dataEntry = @{
-        "latency"  = $latency
-        "filename" = $FileName
+    $splitline = Remove-EmptyStrings -Arr ($file[0]).split(' ')
+    if ($splitline[0] -eq "Protocol") {
+        $histogram = $false
+
+        foreach ($line in $file) {
+            $splitLine = Remove-EmptyStrings -Arr $line.split(' ')
+
+            if ($splitLine.Count -eq 0) {
+                continue
+            }
+
+            if ($splitLine[0] -eq "Protocol") {
+                $dataEntry.protocol = $splitLine[-1]
+            }
+            if ($splitLine[0] -eq "SendMethod") {
+                $dataEntry.sendMethod = $splitLine[-1]
+            }
+            if ($splitLine[0] -eq "MsgSize") {
+                $dataEntry.msgSize = $splitLine[-1] 
+            }
+
+            if ($splitLine[0] -eq "Interval(usec)") {
+                $dataEntry.latency = [HashTable] @{} 
+                $histogram = $true
+                continue
+            }
+
+            if ($histogram) {
+                $dataEntry.latency.([Int32]$splitLine[0]) = [Int32] $splitLine[-1]
+            }
+        }
+
+        if (-not $histogram) {
+            Write-Warning "No histogram in file $filename"
+            return
+        }
+
+    } 
+    else {
+        [Array] $latency = @()
+        foreach ($line in $file) {
+            $latency += ,[int]$line
+        }
+        $dataEntry.latency = $latency
+
+        $dataEntry.protocol = (($FileName.Split('\'))[-1].Split('.'))[0].ToUpper()
     }
 
     return $dataEntry
