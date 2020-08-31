@@ -7,8 +7,8 @@ Given a directory full of NTTTCP, LATTE, or CTStraffic data files, this tool wil
 
 <p align="center">
   <img src="/images/latency-histogram.PNG" title="Latency Histogram" width=75% height=75%>
-  <img src="/images/throughput-quartiles.PNG" width=75% height=75%>
-  <img src="/images/latency-percentiles.PNG" width=75% height=75%>
+  <img src="/images/throughput-quartiles.PNG" title="Throughput Quartiles" width=75% height=75%>
+  <img src="/images/latency-percentiles.PNG" title="Latency Percentiles" width=75% height=75%>
 </p>
 
 The tool can aggregate data from multiple iterations of network performance monitoring tools and it can be given two directories in order to create side by side comparisons of performance measures before and after system changes. 
