@@ -6,9 +6,9 @@ Though these tools are quite capable, reading and interpreting their raw output 
 Given a directory full of NTTTCP, LATTE, or CTStraffic data files, this tool will parse the raw data, analyze it, and then create tables and charts in excel which provide useful visualizations of that data. 
 
 <p align="center">
-  <img src="/images/latency-histogram.PNG" width=50% height=50%>
-  <img src="/images/throughput-quartiles.PNG" >
-  <img src="/images/latency-percentiles.PNG">
+  <img src="/images/latency-histogram.PNG" width=75% height=75%>
+  <img src="/images/throughput-quartiles.PNG" width=75% height=75%>
+  <img src="/images/latency-percentiles.PNG" width=75% height=75%>
 </p>
 
 The tool can aggregate data from multiple iterations of network performance monitoring tools and it can be given two directories in order to create side by side comparisons of performance measures before and after system changes. 
