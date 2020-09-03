@@ -17,11 +17,7 @@ The tool can aggregate data from multiple iterations of network performance moni
 
 # Installation
 ## Manual Installation
-Download this repo to your machine, and then move the Network-Performance-Visualization folder to C:\Program Files\WindowsPowerShell\Modules. After moving the folder, run the following command:
-```PowerShell
-Install-Module Network-Performance-Visualization
-```
-This should import the `New-Visualization` command from the module. You can double check that the module has been properly installed by running:
+Download this repo to your machine, and then move the Network-Performance-Visualization folder to C:\Program Files\WindowsPowerShell\Modules. After moving the folder, PowerShell should automatically install the module. You can double check that everything was installed correctly by running the command
 ```PowerShell
 Get-Module -ListAvailable
 ```
