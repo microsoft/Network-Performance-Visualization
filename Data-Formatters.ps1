@@ -7,6 +7,15 @@ $ORANGES = @(294092, 1681916, 6014716)
 
 $EPS = 0.0001
 
+$ABBREVIATIONS = @{
+    "sessions" = "sess."
+    "bufferLen" = "bufLen."
+    "bufferCount" = "bufCt."
+    "protocol" = "protocol"
+    "sendMethod" = "sndMthd" 
+}
+
+
 $THROUGHPUTS = @(1, 10, 25, 40, 50, 100, 200, 400)
 
 
@@ -30,13 +39,14 @@ function Format-RawData {
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
-        [Parameter()] [String] $TableTitle = ""
+        [Parameter(Mandatory=$true)] $OPivotKey,
+
+        [Parameter()] [String] $Tool = "",
+
+        [Parameter()] [switch] $NoNewWorksheets
     )
 
     try {
-        $tables = @() 
-        $meta = $DataObj.meta
-        $sortProp = $meta.sortProp 
         $legend = @{
             "meta" = @{
                 "colLabelDepth" = 1
@@ -84,6 +94,13 @@ function Format-RawData {
             }
         }
 
+        $meta = $DataObj.meta
+        $innerPivot = $meta.InnerPivot
+        $outerPivot = $meta.OuterPivot
+        $tables = @()
+        if (-not $NoNewWorksheets) {
+            $tables += Get-WorksheetTitle -BaseName "Raw Data" -OuterPivot $outerPivot -OPivotKey $OPivotKey
+        }
         if ($meta.comparison) {
             $tables += $legend
         }
@@ -94,52 +111,69 @@ function Format-RawData {
         foreach ($entry in $baseData) {
             if ($meta.comparison) {
                 $entry.baseline = $true
+            } 
+            if (($OPivotKey -eq $NoPivot) -or ($entry.$outerPivot -eq $OPivotKey)) {
+                $data += $entry
             }
-            $data += $entry
         }
 
         if ($meta.comparison) {
             $testData = $DataObj.rawData.test
             foreach ($entry in $testData) {
-                $data += $entry
+                if (($OPivotKey -eq $NoPivot) -or ($entry.$outerPivot -eq $OPivotKey)) {
+                    $data += $entry
+                }
             }
         }
 
-        $data = Sort-ByProp -Data $data -Prop $sortProp
+        if ($innerPivot) {
+            $data = Sort-ByProp -Data $data -Prop $innerPivot
+        }
+        
 
-        foreach ($prop in $dataObj.data.Keys) {
+        foreach ($prop in $dataObj.data.$OPivotKey.Keys) {
+            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
+
             $table = @{
                 "rows" = @{
                     $prop = @{}
                 }
                 "cols" = @{
-                    $TableTitle = @{}
+                    $tableTitle = @{
+                        $innerPivot = @{}
+                    }
                 }
                 "meta" = @{
                     "columnFormats" = @()
                     "leftAlign"     = [Array] @(2)
                 }
                 "data"  = @{
-                    $TableTitle = @{}
+                    $tableTitle = @{
+                        $innerPivot = @{}
+                    }
                 }
             }
             $col = 0
             $row = 0
 
             foreach ($entry in $data) {
-                $sortKey = $entry.$sortProp
+                if ($innerPivot) {
+                    $IPivotKey = $entry.$innerPivot
+                } else {
+                    $IPivotKey = " "
+                }
 
                 # Add column labels to table
-                if (-not ($table.cols.$TableTitle.Keys -contains $sortKey)) {
+                if (-not ($table.cols.$tableTitle.$innerPivot.Keys -contains $IPivotKey)) {
                     if ($meta.comparison) {
-                        $table.cols.$TableTitle.$sortKey = @{
+                        $table.cols.$tableTitle.$innerPivot.$IPivotKey = @{
                             "baseline" = $col
                             "test" = $col + 1
                         }
                         $table.meta.columnFormats += $meta.format.$prop
                         $table.meta.columnFormats += $meta.format.$prop
                         $col += 2
-                        $table.data.$TableTitle.$sortKey = @{
+                        $table.data.$TableTitle.$innerPivot.$IPivotKey = @{
                             "baseline" = @{
                                 $prop = @{}
                             }
@@ -149,9 +183,9 @@ function Format-RawData {
                         }
                     } 
                     else {
-                        $table.meta.columnFormats        += $meta.format.$prop
-                        $table.cols.$TableTitle.$sortKey  = $col
-                        $table.data.$TableTitle.$sortKey  = @{
+                        $table.meta.columnFormats += $meta.format.$prop
+                        $table.cols.$tableTitle.$innerPivot.$IPivotKey  = $col
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey  = @{
                             $prop = @{}
                         }
                         $col += 1
@@ -160,31 +194,34 @@ function Format-RawData {
 
                 # Add row labels and fill data in table
                 $filename = $entry.fileName.Split('\')[-2] + "\" + $entry.fileName.Split('\')[-1] 
+                while ($table.rows.$prop.keys -contains $filename) {
+                    $filename += "*"
+                }
                 $table.rows.$prop.$filename = $row
                 
                 $row += 1
                 if ($meta.comparison) {
                     if ($entry.baseline) {
-                        $table.data.$TableTitle.$sortKey.baseline.$prop.$filename = @{
+                        $table.data.$TableTitle.$innerPivot.$IPivotKey.baseline.$prop.$filename = @{
                             "value" = $entry.$prop
                         }
                     }
                     else {
-                        $table.data.$TableTitle.$sortKey.test.$prop.$filename = @{
+                        $table.data.$TableTitle.$innerPivot.$IPivotKey.test.$prop.$filename = @{
                             "value" = $entry.$prop
                         }
                         $params = @{
-                            "Cell"    = $table.data.$TableTitle.$sortKey.test.$prop.$filename
+                            "Cell"    = $table.data.$TableTitle.$innerPivot.$IPivotKey.test.$prop.$filename
                             "TestVal" = $entry.$prop
-                            "BaseVal" = $DataObj.data.$prop.$sortKey.baseline.stats.mean
+                            "BaseVal" = $DataObj.data.$OPivotKey.$prop.$IPivotKey.baseline.stats.mean
                             "Goal"    = $meta.goal.$prop
                         }
                         
-                        $table.data.$TableTitle.$sortKey.test.$prop.$filename = Select-Color @params
+                        $table.data.$TableTitle.$innerPivot.$IPivotKey.test.$prop.$filename = Select-Color @params
                     }
                 } 
                 else {
-                    $table.data.$TableTitle.$sortKey.$prop.$filename = @{
+                    $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$filename = @{
                         "value" = $entry.$prop
                     }
                 }
@@ -209,6 +246,48 @@ function Format-RawData {
     }
 }
 
+function Get-WorksheetTitle ($BaseName, $OuterPivot, $OPivotKey, $InnerPivot, $IPivotKey) {
+    if ($OuterPivot -and $InnerPivot) {
+        $OAbv = $ABBREVIATIONS[$OuterPivot]
+        $IAbv = $ABBREVIATIONS[$InnerPivot]
+
+        return "$BaseName - $OPivotKey $OAbv - $IPivotKey $IAbv"    
+    } 
+    elseif ($OuterPivot) {
+        $OAbv = $ABBREVIATIONS[$OuterPivot]
+        return "$BaseName - $OPivotKey $OAbv"
+    } 
+    elseif ($InnerPivot) {
+        $IAbv = $ABBREVIATIONS[$InnerPivot]
+        return "$BaseName - $IPivotKey $IAbv"
+    }
+    else {
+        return "$BaseName"
+    }
+}
+
+function Get-TableTitle ($Tool, $OuterPivot, $OPivotKey, $InnerPivot, $IPivotKey) { 
+    if ($OuterPivot -and $InnerPivot) {
+        $OAbv = $ABBREVIATIONS[$OuterPivot]
+        $IAbv = $ABBREVIATIONS[$InnerPivot]
+
+        return "$Tool - $OPivotKey $OAbv - $IPivotKey $IAbv"
+    } 
+    elseif ($OuterPivot) {
+        $OAbv = $ABBREVIATIONS[$OuterPivot]
+
+        return "$Tool - $OPivotKey $OAbv"
+    } 
+    elseif ($InnerPivot) {
+        $IAbv = $ABBREVIATIONS[$InnerPivot]
+
+        return "$Tool - $IPivotKey $IAbv"
+    }
+    else {
+        return "$Tool"
+    }
+    
+}
 
 ##
 # Format-Stats
@@ -233,58 +312,72 @@ function Format-Stats {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
-        [Parameter()] [String] $TableTitle = "",
+        [Parameter(Mandatory=$true)] $OPivotKey,
 
-        [Parameter()] [Array] $Metrics=$null
+        [Parameter()] $Metrics = $null,
+
+        [Parameter()] [String] $Tool = "",
+
+        [Parameter()] [switch] $NoNewWorksheets
     )
     
     try {
         $tables = @()
         $data = $DataObj.data
         $meta = $DataObj.meta
-        foreach ($prop in $data.keys) { 
+        $innerPivot = $meta.InnerPivot
+        $outerPivot = $meta.OuterPivot
+
+        foreach ($prop in $data.$OPivotKey.keys) {
+            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
+
             $table = @{
                 "rows" = @{
                     $prop = @{}
                 }
                 "cols" = @{
-                    $TableTitle = @{}
+                    $tableTitle = @{
+                        $innerPivot = @{}
+                    }
                 }
                 "meta" = @{
                     "columnFormats" = @()
                 }
                 "data" = @{
-                    $TableTitle = @{}
+                    $tableTitle = @{
+                        $innerPivot = @{}
+                    }
                 }
             }
             $col = 0
             $row = 0
             $noStats = $false
-            foreach ($sortKey in $data.$prop.Keys | Sort) { 
-                if (-not $data.$prop.$sortKey.baseline.stats) {
+            foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
+                if (-Not ($data.$OPivotKey.$prop.$IPivotKey.baseline.Keys -contains "stats")) {
                     $noStats = $true
                     break
                 }
+
                 # Add column labels to table
                 if (-not $meta.comparison) {
-                    $table.cols.$TableTitle.$sortKey  = $col
-                    $table.meta.columnFormats        += $meta.format.$prop 
-                    $table.data.$TableTitle.$sortKey  = @{
+                    $table.cols.$tableTitle.$innerPivot.$IPivotKey  = $col 
+                    $table.data.$tableTitle.$innerPivot.$IPivotKey  = @{
                         $prop = @{}
                     }
                     $col += 1
+                    $table.meta.columnFormats += $meta.format.$prop
                 } 
                 else {
-                    $table.cols.$TableTitle.$sortKey = @{
+                    $table.cols.$tableTitle.$innerPivot.$IPivotKey = @{
                         "baseline" = $col
                         "% Change" = $col + 1
-                        "test" = $col + 2
+                        "test"     = $col + 2
                     }
                     $table.meta.columnFormats += $meta.format.$prop
                     $table.meta.columnFormats += $meta.format."% change"
                     $table.meta.columnFormats += $meta.format.$prop
                     $col += 3
-                    $table.data.$TableTitle.$sortKey = @{
+                    $table.data.$tableTitle.$innerPivot.$IPivotKey = @{
                         "baseline" = @{
                             $prop = @{}
                         }
@@ -298,7 +391,7 @@ function Format-Stats {
                 }
 
                 if (-not $Metrics) {
-                    $Metrics = ($data.$prop.$sortKey.baseline.stats.Keys | Sort)
+                    $Metrics = ($data.$OPivotKey.$prop.$IPivotKey.baseline.stats.Keys | Sort)
                 }
 
                 # Add row labels and fill data in table
@@ -309,36 +402,35 @@ function Format-Stats {
                     }
 
                     if (-not $meta.comparison) {
-                        $table.data.$TableTitle.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$metric = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric}
                     } 
                     else {
-                        $table.data.$TableTitle.$sortKey.baseline.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
-                        $table.data.$TableTitle.$sortKey.test.$prop.$metric     = @{"value" = $data.$prop.$sortKey.test.stats.$metric}
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey.baseline.$prop.$metric = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric}
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey.test.$prop.$metric     = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.$metric}
                     
-                        $percentChange = $data.$prop.$sortKey."% change".stats.$metric
+                        $percentChange = $data.$OPivotKey.$prop.$IPivotKey."% change".stats.$metric
 
-                        $table.data.$TableTitle.$sortKey."% change".$prop.$metric = @{"value" = "$percentChange %"}
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = @{"value" = "$percentChange %"}
 
                         $params = @{
-                            "Cell"    = $table.data.$TableTitle.$sortKey."% change".$prop.$metric
-                            "TestVal" = $data.$prop.$sortKey.test.stats.$metric
-                            "BaseVal" = $data.$prop.$sortKey.baseline.stats.$metric
+                            "Cell"    = $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric
+                            "TestVal" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.$metric
+                            "BaseVal" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric
                             "Goal"    = $meta.goal.$prop
                         }
 
                         # Color % change cell if necessary
                         if (@("std dev", "variance", "std err", "range") -contains $metric) {
                             $params.goal = "decrease"
-                            $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
+                            $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Select-Color @params
                         } 
                         elseif ( -not (@("sum", "count", "kurtosis", "skewness") -contains $metric)) {
-                            $table.data.$TableTitle.$sortKey."% change".$prop.$metric = Select-Color @params
+                            $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Select-Color @params
                         }
                     }
                 }
             }
             if ($noStats) {
-                $noStats = $false
                 continue
             }
 
@@ -348,8 +440,9 @@ function Format-Stats {
             $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
             $tables = $tables + $table
         }
-        if ($tables.Count -gt 0) {
-            $tables = @("Stats") + $tables 
+        if (($tables.Count -gt 0) -and (-not $NoNewWorksheets)) {
+            $sheetTitle = Get-WorksheetTitle -BaseName "Stats" -OuterPivot $outerPivot -OPivotKey $OPivotKey
+            $tables     = @($sheetTitle) + $tables 
         }
 
         return $tables
@@ -381,25 +474,31 @@ function Format-Quartiles {
     param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
-        [Parameter()] [String] $TableTitle = ""
+        [Parameter(Mandatory=$true)] $OPivotKey, 
+
+        [Parameter()] [String] $Tool = "",
+
+        [Parameter()] [switch] $NoNewWorksheets
     )
     try {
         $tables = @()
         $data = $DataObj.data
         $meta = $DataObj.meta
-        $sortProp = $meta.sortProp
+        $innerPivot = $meta.InnerPivot
+        $outerPivot = $meta.OuterPivot
 
-        foreach ($prop in $data.Keys) { 
+        foreach ($prop in $data.$OPivotKey.Keys) { 
             $format = $meta.format.$prop
+            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
             $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop)
             $table = @{
                 "rows" = @{
                     $prop = @{
-                        $sortProp = @{}
+                        $innerPivot = @{}
                     }
                 }
                 "cols" = @{
-                    $TableTitle = @{
+                    $tableTitle = @{
                         "min" = 0
                         "Q1"  = 1
                         "Q2"  = 2
@@ -412,30 +511,30 @@ function Format-Quartiles {
                     "dataWidth" = 5
                 }
                 "data" = @{
-                    $TableTitle = @{
+                    $tableTitle = @{
                         "min" = @{
                             $prop = @{
-                                $sortProp = @{}
+                                $innerPivot = @{}
                             }
                         }
                         "Q1" = @{
                             $prop = @{
-                                $sortProp = @{}
+                                $innerPivot = @{}
                             }
                         }
                         "Q2" = @{
                             $prop = @{
-                                $sortProp = @{}
+                                $innerPivot = @{}
                             }
                         }
                         "Q3" = @{
                             $prop = @{
-                                $sortProp = @{}
+                                $innerPivot = @{}
                             }
                         }
                         "Q4" = @{
                             $prop = @{
-                                $sortProp = @{}
+                                $innerPivot = @{}
                             }
                         }
                     }
@@ -467,51 +566,57 @@ function Format-Quartiles {
             
             # Add row labels and fill data in table
             $row = 0
-            foreach ($sortKey in $data.$prop.Keys | Sort) {
+            foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
                 if (-not $meta.comparison) {
-                    $table.rows.$prop.$sortProp.$sortKey = $row
+                    $table.rows.$prop.$innerPivot.$IPivotKey = $row
                     $row += 1
-                    $table.data.$TableTitle.min.$prop.$sortProp.$sortKey = @{ "value" = $data.$prop.$sortKey.baseline.stats.min }
-                    $table.data.$TableTitle.Q1.$prop.$sortProp.$sortKey  = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[25] - $data.$prop.$sortKey.baseline.stats.min }
-                    $table.data.$TableTitle.Q2.$prop.$sortProp.$sortKey  = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[50] - $data.$prop.$sortKey.baseline.percentiles[25] } 
-                    $table.data.$TableTitle.Q3.$prop.$sortProp.$sortKey  = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[75] - $data.$prop.$sortKey.baseline.percentiles[50]}
-                    $table.data.$TableTitle.Q4.$prop.$sortProp.$sortKey  = @{ "value" = $data.$prop.$sortKey.baseline.stats.max - $data.$prop.$sortKey.baseline.percentiles[75] }
+                    $table.data.$TableTitle.min.$prop.$innerPivot.$IPivotKey = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
+                    $table.data.$TableTitle.Q1.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] - $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
+                    $table.data.$TableTitle.Q2.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] } 
+                    $table.data.$TableTitle.Q3.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50]}
+                    $table.data.$TableTitle.Q4.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.max - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] }
                 } 
                 else {
-                    $table.rows.$prop.$sortProp.$sortKey = @{
+                    $table.rows.$prop.$innerPivot.$IPivotKey = @{
                         "baseline" = $row
                         "test"     = $row + 1
                     }
                     $row += 2
-                    $table.data.$TableTitle.min.$prop.$sortProp.$sortKey = @{
-                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.stats.min }
-                        "test"     = @{ "value" = $data.$prop.$sortKey.test.stats.min}
+                    $table.data.$TableTitle.min.$prop.$innerPivot.$IPivotKey = @{
+                        "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
+                        "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.min}
                     }
-                    $table.data.$TableTitle.Q1.$prop.$sortProp.$sortKey = @{
-                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[25] - $data.$prop.$sortKey.baseline.stats.min }
-                        "test"     = @{ "value" = $data.$prop.$sortKey.test.percentiles[25] - $data.$prop.$sortKey.test.stats.min }
+                    $table.data.$TableTitle.Q1.$prop.$innerPivot.$IPivotKey = @{
+                        "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] - $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
+                        "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[25] - $data.$OPivotKey.$prop.$IPivotKey.test.stats.min }
                     }
-                    $table.data.$TableTitle.Q2.$prop.$sortProp.$sortKey = @{
-                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[50] - $data.$prop.$sortKey.baseline.percentiles[25] } 
-                        "test"     = @{ "value" = $data.$prop.$sortKey.test.percentiles[50] - $data.$prop.$sortKey.test.percentiles[25] } 
+                    $table.data.$TableTitle.Q2.$prop.$innerPivot.$IPivotKey = @{
+                        "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] } 
+                        "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[50] - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[25] } 
                     }
-                    $table.data.$TableTitle.Q3.$prop.$sortProp.$sortKey = @{
-                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.percentiles[75] - $data.$prop.$sortKey.baseline.percentiles[50] } 
-                        "test"     = @{ "value" = $data.$prop.$sortKey.test.percentiles[75] - $data.$prop.$sortKey.test.percentiles[50] }
+                    $table.data.$TableTitle.Q3.$prop.$innerPivot.$IPivotKey = @{
+                        "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50] } 
+                        "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[75] - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[50] }
                     }
-                    $table.data.$TableTitle.Q4.$prop.$sortProp.$sortKey = @{
-                        "baseline" = @{ "value" = $data.$prop.$sortKey.baseline.stats.max - $data.$prop.$sortKey.baseline.percentiles[75] }
-                        "test"     = @{ "value" = $data.$prop.$sortKey.test.stats.max - $data.$prop.$sortKey.test.percentiles[75] }
+                    $table.data.$TableTitle.Q4.$prop.$innerPivot.$IPivotKey = @{
+                        "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.max - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] }
+                        "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.max - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[75] }
                     }
                 }
-
             }
+
             $table.meta.dataWidth     = Get-TreeWidth $table.cols
             $table.meta.colLabelDepth = Get-TreeDepth $table.cols
             $table.meta.dataHeight    = Get-TreeWidth $table.rows
             $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
             $tables = $tables + $table
         }
+
+        if (($tables.Count -gt 0) -and (-not $NoNewWorksheets)) {
+            $sheetTitle = Get-WorksheetTitle -BaseName "Quartiles" -OuterPivot $outerPivot -OPivotKey $OPivotKey
+            $tables = @($sheetTitle) + $tables
+        }
+
         return $tables
     } 
     catch {
@@ -542,32 +647,38 @@ function Format-MinMaxChart {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
-        [Parameter()] [String] $TableTitle = ""
+        [Parameter(Mandatory=$true)] $OPivotKey, 
+
+        [Parameter()] [String] $Tool = "",
+
+        [Parameter()] [switch] $NoNewWorksheets
     )
     
     try {
-        $tables   = @()
-        $data     = $DataObj.data
-        $meta     = $DataObj.meta
-        $sortProp = $meta.sortProp
+        $tables     = @()
+        $data       = $DataObj.data
+        $meta       = $DataObj.meta
+        $innerPivot = $meta.InnerPivot
+        $outerPivot = $meta.OuterPivot
 
-        foreach ($prop in $data.keys) {
+        foreach ($prop in $data.$OPivotKey.keys) {
             $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop) 
+            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
             $table = @{
                 "rows" = @{
                     $prop = @{}
                 }
                 "cols" = @{
-                    $TableTitle = @{
-                        $sortProp = @{}
+                    $tableTitle = @{
+                        $innerPivot = @{}
                     }
                 }
                 "meta" = @{
                     "columnFormats" = @()
                 }
                 "data" = @{
-                    $TableTitle = @{
-                        $sortProp = @{}
+                    $tableTitle = @{
+                        $innerPivot = @{}
                     }
                 }
                 "chartSettings" = @{
@@ -575,7 +686,7 @@ function Format-MinMaxChart {
                     "plotBy"       = $XLENUM.xlRows
                     "title"        = $cappedProp
                     "xOffset"      = 1
-                    "yOffset"      = 1
+                    "yOffset"      = 2
                     "dataTable"    = $true
                     "hideLegend"   = $true
                     "axisSettings" = @{
@@ -662,10 +773,10 @@ function Format-MinMaxChart {
             }
             $col = 0
             $row = 0
-            foreach ($sortKey in $data.$prop.Keys | Sort) {
+            foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
                 # Add column labels to table
-                $table.cols.$TableTitle.$sortProp.$sortKey = $col
-                $table.data.$TableTitle.$sortProp.$sortKey = @{
+                $table.cols.$tableTitle.$innerPivot.$IPivotKey = $col
+                $table.data.$tableTitle.$innerPivot.$IPivotKey = @{
                     $prop = @{}
                 }
                 $table.meta.columnFormats += $meta.format.$prop
@@ -686,16 +797,16 @@ function Format-MinMaxChart {
                             $row += 2
                         }
                     }
-                    if (-not ($table.data.$TableTitle.$sortProp.$sortKey.$prop.Keys -contains $metric)) {
-                        $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{}
+                    if (-not ($table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.Keys -contains $metric)) {
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$metric = @{}
                     }
 
                     if (-not $meta.comparison) {
-                        $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$metric = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric}
                     } 
                     else {
-                        $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.baseline = @{"value" = $data.$prop.$sortKey.baseline.stats.$metric}
-                        $table.data.$TableTitle.$sortProp.$sortKey.$prop.$metric.test     = @{"value" = $data.$prop.$sortKey.test.stats.$metric}
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$metric.baseline = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric}
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$metric.test     = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.$metric}
                     }
                 }
 
@@ -706,6 +817,12 @@ function Format-MinMaxChart {
             $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
             $tables = $tables + $table
         }
+
+        if (($tables.Count -gt 0) -and (-not $NoNewWorksheets)) {
+            $sheetTitle = Get-WorksheetTitle -BaseName "MinMeanMax" -OuterPivot $outerPivot -OPivotKey $OPivotKey
+            $tables = @($sheetTitle) + $tables
+        }
+
         return $tables
     } 
     catch {
@@ -737,166 +854,179 @@ function Format-Percentiles {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
-        [Parameter()] [String] $TableTitle = ""
+        [Parameter(Mandatory=$true)] $OPivotKey,
+
+        [Parameter()] [String] $Tool = "",
+
+        [Parameter()] [switch] $NoNewWorksheets
     )
     try {
-        $tables    = @()
-        $data      = $DataObj.data
-        $meta      = $DataObj.meta
-        $sortProp  = $meta.sortProp
-        $baseTitle = $TableTitle
-        foreach ($MetricName in @("percentiles", "percentilesHist" )){
-            foreach ($prop in $data.Keys) {
-                foreach ($sortKey in $data.$prop.Keys | Sort) {
-                    if (-not $data.$prop.$sortKey.baseline.$MetricName) {
-                        continue
+        $tables     = @()
+        $data       = $DataObj.data
+        $meta       = $DataObj.meta
+        $innerPivot = $meta.InnerPivot
+        $outerPivot = $meta.OuterPivot
+
+        
+        foreach ($prop in $data.$OPivotKey.Keys) {
+            foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
+                if ($data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles) {
+                    $metricName = "percentiles"
+                } 
+                elseif ($data.$OPivotKey.$prop.$IPivotKey.baseline.percentilesHist) {
+                    $metricName = "percentilesHist"
+                } 
+                else {
+                    continue
+                }
+
+                if ($innerPivot) {
+                    if ($metricName -eq "percentilesHist") {
+                        $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Appx. Percentiles - $IPivotKey $innerPivot")
+                    } 
+                    else {
+                        $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles - $IPivotKey $innerPivot")
                     }
-                    if ($sortProp) {
-                        $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles - $sortKey $sortProp")
-                        $TableTitle = "$baseTitle - $sortKey $sortProp"
-                    } else {
+                        
+                    $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                } 
+                else {
+                    if ($metricName -eq "percentilesHist") {
+                        $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Appx. Percentiles")
+                    } 
+                    else {
                         $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles")
-                        $TableTitle = "$baseTitle"
                     }
+                        
+                    $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                }
                 
-                    $table = @{
-                        "rows" = @{
+                $table = @{
+                    "rows" = @{
+                        "percentiles" = @{}
+                    }
+                    "cols" = @{
+                        $tableTitle = @{
+                            $prop = 0
+                        }
+                    }
+                    "meta" = @{
+                        "columnFormats" = @($meta.format.$prop)
+                        "rightAlign"    = [Array] @(2)
+                    }
+                    "data" = @{
+                        $tableTitle = @{
+                            $prop = @{
+                                "percentiles" = @{}
+                            }
+                        }
+                    }
+                    "chartSettings" = @{
+                        "title"     = $chartTitle
+                        "yOffset"   = 1
+                        "xOffset"   = 1
+                        "chartType" = $XLENUM.xlXYScatterLinesNoMarkers
+                        "seriesSettings" = @{
+                            1 = @{ 
+                                "color"      = $BLUES[1]
+                                "lineWeight" = 3
+                            }
+                        }
+                        "axisSettings" = @{
+                            1 = @{
+                                "max"            = 100
+                                "title"          = "Percentiles"
+                                "minorGridlines" = $true
+                            }
+                            2 = @{
+                                "title" = $meta.units[$prop]
+                            }
+                        }
+                    }
+                }
+
+                if ($prop -eq "throughput") {
+                    $max = Get-ThroughputMax -Data $data -OPivotKey $OPivotKey -IPivotKey $IPivotKey -Meta $meta
+                    if ($max -ne -1) {
+                        $table.chartSettings.axisSettings[2].max = $max
+                    }
+                }
+                    
+                $table.chartSettings.axisSettings[2].logarithmic = Set-Logarithmic -Data $data -OPivotKey $OPivotKey -Prop $prop -IPivotKey $IPivotKey -Meta $meta 
+
+                if ($meta.comparison) {
+                    $table.cols.$tableTitle.$prop = @{
+                        "baseline" = 0
+                        "% change" = 1
+                        "test"     = 2
+                    }
+                    $table.data.$tableTitle.$prop = @{
+                        "baseline" = @{
                             "percentiles" = @{}
                         }
-                        "cols" = @{
-                            $TableTitle = @{
-                                $prop = 0
-                            }
+                        "% change" = @{
+                            "percentiles" = @{}
                         }
-                        "meta" = @{
-                            "columnFormats" = @($meta.format.$prop)
-                            "rightAlign"    = [Array] @(2)
-                        }
-                        "data" = @{
-                            $TableTitle = @{
-                                $prop = @{
-                                    "percentiles" = @{}
-                                }
-                            }
-                        }
-                        "chartSettings"= @{
-                            "title"     = $chartTitle
-                            "yOffset"   = 1
-                            "xOffset"   = 1
-                            "chartType" = $XLENUM.xlXYScatterLinesNoMarkers
-                            "seriesSettings" = @{
-                                1 = @{ 
-                                    "color" = $BLUES[1]
-                                    "lineWeight" = 3
-                                }
-                            }
-                            "axisSettings" = @{
-                                1 = @{
-                                    "max"            = 100
-                                    "title"          = "Percentiles"
-                                    "minorGridlines" = $true
-                                }
-                                2 = @{
-                                    "title" = $meta.units[$prop]
-                                }
-                            }
+                        "test" = @{
+                            "percentiles" = @{}
                         }
                     }
-                    if ($prop -eq "throughput") {
-                        $max = -1
-                        foreach ($val in $THROUGHPUTS) {
-                            if ($val -gt $data.$prop.$sortKey.baseline.stats.max) {
-                                if ($meta.comparison) {
-                                    if ($val -gt $data.$prop.$sortKey.test.stats.max) {
-                                        $max = $val
-                                        break
-                                    }
-                                } else {
-                                    $max = $val 
-                                    break
-                                }
-                            }
-                        }
-                        if ($max -ne -1) {
-                            $table.chartSettings.axisSettings[2].max = $max
-                        }
+                    $table.chartSettings.seriesSettings[2] = @{
+                        "delete" = $true
                     }
-                    if ($data.$prop.$sortKey.baseline.stats) {
-                        if (($data.$prop.$sortKey.baseline.stats.max / ($data.$prop.$sortKey.baseline.stats.min + $EPS)) -gt 10) {
-                            $table.chartSettings.axisSettings[2].logarithmic = $true
-                        }
-                        if ($meta.comparison -and (($data.$prop.$sortKey.test.stats.max / ($data.$prop.$sortKey.test.stats.min + $EPS)) -gt 10)) {
-                            $table.chartSettings.axisSettings[2].logarithmic = $true
-                        }
+                    $table.chartSettings.seriesSettings[3] = @{
+                        "color"      = $ORANGES[1]
+                        "lineWeight" = 3
                     }
-
-                    if ($meta.comparison) {
-                        $table.cols.$TableTitle.$prop = @{
-                            "baseline" = 0
-                            "% change" = 1
-                            "test"     = 2
-                        }
-                        $table.data.$TableTitle.$prop = @{
-                            "baseline" = @{
-                                "percentiles" = @{}
-                            }
-                            "% change" = @{
-                                "percentiles" = @{}
-                            }
-                            "test" = @{
-                                "percentiles" = @{}
-                            }
-                        }
-                        $table.chartSettings.seriesSettings[2] = @{
-                            "delete" = $true
-                        }
-                        $table.chartSettings.seriesSettings[3] = @{
-                            "color"      = $ORANGES[1]
-                            "lineWeight" = 3
-                        }
-                        $table.meta.columnFormats = @($meta.format.$prop, $meta.format."% change", $meta.format.$prop)
-                    }
-                    $row = 0
-
-                    $keys = @()
-                    if ($data.$prop.$sortKey.baseline.$MetricName.Keys.Count -gt 0) {
-                        $keys = $data.$prop.$sortKey.baseline.$MetricName.Keys
-                    } else {
-                        $keys = $data.$prop.$sortKey.test.$MetricName.Keys
-                    }
-
-                    # Add row labels and fill data in table
-                    foreach ($percentile in $keys | Sort) {
-                        $table.rows.percentiles.$percentile = $row
-                        if ($meta.comparison) {
-                            $percentage = $data.$prop.$sortKey."% change".$MetricName[$percentile]
-                            $percentage = "$percentage %"
-
-                            $table.data.$TableTitle.$prop.baseline.percentiles[$percentile]   = @{"value" = $data.$prop.$sortKey.baseline.$MetricName.$percentile}
-                            $table.data.$TableTitle.$prop."% change".percentiles[$percentile] = @{"value" = $percentage}
-                            $table.data.$TableTitle.$prop.test.percentiles[$percentile]       = @{"value" = $data.$prop.$sortKey.test.$MetricName.$percentile}
-                            $params = @{
-                                "Cell"    = $table.data.$TableTitle.$prop."% change".percentiles[$percentile]
-                                "TestVal" = $data.$prop.$sortKey.test.$MetricName[$percentile]
-                                "BaseVal" = $data.$prop.$sortKey.baseline.$MetricName[$percentile]
-                                "Goal"    = $meta.goal.$prop
-                            }
-                            $table.data.$TableTitle.$prop."% change".percentiles[$percentile] = Select-Color @params
-                        } 
-                        else {
-                            $table.data.$TableTitle.$prop.percentiles[$percentile] = @{"value" = $data.$prop.$sortKey.baseline.$MetricName.$percentile}
-                        }
-                        $row += 1
-                
-                    }
-                    $table.meta.dataWidth     = Get-TreeWidth $table.cols
-                    $table.meta.colLabelDepth = Get-TreeDepth $table.cols
-                    $table.meta.dataHeight    = Get-TreeWidth $table.rows
-                    $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-                    $tables = $tables + $table
+                    $table.meta.columnFormats = @($meta.format.$prop, $meta.format."% change", $meta.format.$prop)
                 }
+                $row = 0
+
+                $keys = @()
+                if ($data.$OPivotKey.$prop.$IPivotKey.baseline.$metricName.Keys.Count -gt 0) {
+                    $keys = $data.$OPivotKey.$prop.$IPivotKey.baseline.$metricName.Keys
+                } 
+                else {
+                    $keys = $data.$OPivotKey.$prop.$IPivotKey.test.$metricName.Keys
+                }
+
+                # Add row labels and fill data in table
+                foreach ($percentile in $keys | Sort) {
+                    $table.rows.percentiles.$percentile = $row
+                    if ($meta.comparison) {
+                        $percentage = $data.$OPivotKey.$prop.$IPivotKey."% change".$metricName[$percentile]
+                        $percentage = "$percentage %"
+
+                        $table.data.$tableTitle.$prop.baseline.percentiles[$percentile]   = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.$metricName.$percentile}
+                        $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = @{"value" = $percentage}
+                        $table.data.$tableTitle.$prop.test.percentiles[$percentile]       = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.$metricName.$percentile}
+                        $params = @{
+                            "Cell"    = $table.data.$tableTitle.$prop."% change".percentiles[$percentile]
+                            "TestVal" = $data.$OPivotKey.$prop.$IPivotKey.test.$MetricName[$percentile]
+                            "BaseVal" = $data.$OPivotKey.$prop.$IPivotKey.baseline.$MetricName[$percentile]
+                            "Goal"    = $meta.goal.$prop
+                        }
+                        $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = Select-Color @params
+                    } 
+                    else {
+                        $table.data.$tableTitle.$prop.percentiles[$percentile] = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.$metricName.$percentile}
+                    }
+                    $row += 1
+                
+                }
+                $table.meta.dataWidth     = Get-TreeWidth $table.cols
+                $table.meta.colLabelDepth = Get-TreeDepth $table.cols
+                $table.meta.dataHeight    = Get-TreeWidth $table.rows
+                $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+                $tables = $tables + $table
             }
         }
+
+        if (($tables.Count -gt 0) -and (-not $NoNewWorksheets)) {
+            $sheetTitle = Get-WorksheetTitle -BaseName "Percentiles" -OuterPivot $outerPivot -OPivotKey $OPivotKey
+            $tables     = @($sheetTitle) + $tables 
+        }
+
         return $tables  
     } 
     catch {
@@ -905,11 +1035,63 @@ function Format-Percentiles {
     }
 }
 
+function Set-Logarithmic ($Data, $OPivotKey, $Prop, $IPivotKey, $Meta) {
+    if ($data.$OPivotKey.$Prop.$IPivotKey.baseline.stats) {
+        if ($data.$OPivotKey.$Prop.$IPivotKey.baseline.stats.min -le 0) {
+            return $false
+        }
+        if ($Meta.comparison) {
+            if ($data.$OPivotKey.$Prop.$IPivotKey.test.stats.min -le 0) {
+                return $false
+            }
+        }
+        if (($data.$OPivotKey.$Prop.$IPivotKey.baseline.stats.max / ($data.$OPivotKey.$Prop.$IPivotKey.baseline.stats.min + $EPS)) -gt 10) {
+            return $true
+        }
+
+        if ($Meta.comparison) {
+            if (($data.$OPivotKey.$Prop.$IPivotKey.test.stats.max / ($data.$OPivotKey.$Prop.$IPivotKey.test.stats.min + $EPS)) -gt 10) {
+                return $true
+            }
+            if (($data.$OPivotKey.$Prop.$IPivotKey.test.stats.max / ($data.$OPivotKey.$Prop.$IPivotKey.baseline.stats.min + $EPS)) -gt 10) {
+                return $true
+            }
+            if (($data.$OPivotKey.$Prop.$IPivotKey.baseline.stats.max / ($data.$OPivotKey.$Prop.$IPivotKey.test.stats.min + $EPS)) -gt 10) {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+function Get-ThroughputMax ($Data, $OPivotKey, $IPivotKey, $Meta) {
+    $max = -1
+    foreach ($val in $THROUGHPUTS) {
+        if ($val -gt $Data.$OPivotKey.throughput.$IPivotKey.baseline.stats.max) {
+            if ($Meta.comparison) {
+                if ($val -gt $data.$OPivotKey.throughput.$IPivotKey.test.stats.max) {
+                    $max = $val
+                    break
+                }
+            } 
+            else {
+                $max = $val 
+                break
+            }
+        }
+    }
+    return $max
+}
+
 function Format-Histogram {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
-        [Parameter()] [String] $TableTitle = ""
+        [Parameter(Mandatory=$true)] $OPivotKey,
+
+        [Parameter()] [String] $Tool = "",
+
+        [Parameter()] [switch] $NoNewWorksheets
     )
     try {
         $legend = @{
@@ -960,31 +1142,33 @@ function Format-Histogram {
             }
         }
 
-        $tables    = @()
-        $data      = $DataObj.data
-        $meta      = $DataObj.meta
-        $sortProp  = $meta.sortProp
-        $baseTitle = $TableTitle
-        foreach ($prop in $data.Keys) {
-            foreach ($sortKey in $data.$prop.Keys | Sort) {
-                if (-Not $data.$prop.$sortKey.baseline.Histogram) {
+        $tables     = @()
+        $data       = $DataObj.data
+        $meta       = $DataObj.meta
+        $innerPivot = $meta.InnerPivot
+        $outerPivot = $meta.OuterPivot 
+
+        foreach ($prop in $data.$OPivotKey.Keys) {
+            foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
+                if (-Not $data.$OPivotKey.$prop.$IPivotKey.baseline.Histogram) {
                     continue
                 }
 
-                if ($sortProp) {
-                    $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Histogram - $sortKey $sortProp")
-                    $TableTitle = "$baseTitle - $sortKey $sortProp"
+                $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+
+                if ($IPivotKEy) {
+                    $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Histogram - $IPivotKey $innerPivot") 
                 } else {
-                    $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Histogram")
-                    $TableTitle = "$baseTitle"
+                    $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Histogram") 
                 }
+
                 $units = $meta.units.$prop
                 $table = @{
                     "rows" = @{
                         "histogram buckets" = @{}
                     }
                     "cols" = @{
-                        $TableTitle = @{
+                        $tableTitle = @{
                             $prop = 0
                         }
                     }
@@ -992,7 +1176,7 @@ function Format-Histogram {
                         "rightAlign" = [Array] @(2)
                     }
                     "data" = @{
-                        $TableTitle = @{
+                        $tableTitle = @{
                             $prop = @{
                                 "histogram buckets" = @{}
                             }
@@ -1022,12 +1206,12 @@ function Format-Histogram {
                 }
                 
                 if ($meta.comparison) {
-                    $table.cols.$TableTitle.$prop = @{
+                    $table.cols.$tableTitle.$prop = @{
                         "baseline" = 0
                         "% change" = 1
                         "test"     = 2
                     }
-                    $table.data.$TableTitle.$prop = @{
+                    $table.data.$tableTitle.$prop = @{
                         "baseline" = @{
                             "histogram buckets" = @{}
                         }
@@ -1053,32 +1237,32 @@ function Format-Histogram {
                 $row = 0
 
                 $keys = @()
-                if ($data.$prop.$sortKey.baseline.histogram.Keys.Count -gt 0) {
-                    $keys = $data.$prop.$sortKey.baseline.histogram.Keys
+                if ($data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.Keys.Count -gt 0) {
+                    $keys = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.Keys
                 } else {
-                    $keys = $data.$prop.$sortKey.test.histogram.Keys
+                    $keys = $data.$OPivotKey.$prop.$IPivotKey.test.histogram.Keys
                 }
 
                 # Add row labels and fill data in table
                 foreach ($bucket in ($keys | Sort)) {
                     $table.rows."histogram buckets".$bucket = $row
                     if ($meta.comparison) {
-                        $percentage = $data.$prop.$sortKey."% change".histogram[$bucket]
+                        $percentage = $data.$OPivotKey.$prop.$IPivotKey."% change".histogram[$bucket]
                         $percentage = "$percentage %"
 
-                        $table.data.$TableTitle.$prop.baseline."histogram buckets"[$bucket]   = @{"value" = $data.$prop.$sortKey.baseline.histogram.$bucket}
-                        $table.data.$TableTitle.$prop."% change"."histogram buckets"[$bucket] = @{"value" = $percentage}
-                        $table.data.$TableTitle.$prop.test."histogram buckets"[$bucket]       = @{"value" = $data.$prop.$sortKey.test.histogram.$bucket}
+                        $table.data.$tableTitle.$prop.baseline."histogram buckets"[$bucket]   = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.$bucket}
+                        $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = @{"value" = $percentage}
+                        $table.data.$tableTitle.$prop.test."histogram buckets"[$bucket]       = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.histogram.$bucket}
                         $params = @{
-                            "Cell"    = $table.data.$TableTitle.$prop."% change"."histogram buckets"[$bucket]
-                            "TestVal" = $data.$prop.$sortKey.test.histogram[$bucket]
-                            "BaseVal" = $data.$prop.$sortKey.baseline.histogram[$bucket]
+                            "Cell"    = $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket]
+                            "TestVal" = $data.$OPivotKey.$prop.$IPivotKey.test.histogram[$bucket]
+                            "BaseVal" = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram[$bucket]
                             "Goal"    = "increase"
                         }
-                        $table.data.$TableTitle.$prop."% change"."histogram buckets"[$bucket] = Select-Color @params
+                        $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = Select-Color @params
                     } 
                     else {
-                        $table.data.$TableTitle.$prop."histogram buckets"[$bucket] = @{"value" = $data.$prop.$sortKey.baseline.histogram.$bucket}
+                        $table.data.$tableTitle.$prop."histogram buckets"[$bucket] = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.$bucket}
                     }
                     $row += 1
                 
@@ -1094,7 +1278,8 @@ function Format-Histogram {
             if ($meta.comparison) {
                 $tables = @($legend) + $tables
             }
-            $tables = @("Summary Histogram") + $tables
+            $worksheetTitle = Get-WorksheetTitle -BaseName "Histogram" -OuterPivot $outerPivot -OPivotKey $OPivotKey
+            $tables = @($worksheetTitle) + $tables
         }
         return $tables  
     } 
@@ -1127,44 +1312,49 @@ function Format-Distribution {
     Param (
         [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
 
-        [Parameter()] [String] $Title = "",
+        [Parameter()] [string] $OPivotKey,
+
+        [Parameter()] [String] $Tool = "",
 
         [Parameter()] [String] $Prop = "latency",
 
         [Parameter()] [String] $NumSamples = 10000,
     
-        [Parameter()] [Int] $SubSampleRate = 50
+        [Parameter()] [Int] $SubSampleRate = 50,
+
+        [Parameter()] [switch] $NoNewWorksheets
         
     )
     try {
-        $meta  = $DataObj.meta
+        $meta  = $DataObj.meta 
         $modes = @("baseline")
         if ($meta.comparison) {
             $modes += "test"
         }
-        $tables = @()
-        $sortProp = $DataObj.meta.sortProp
-        foreach ($sortKey in $DataObj.data.$Prop.Keys) {
+        $tables     = @()
+        $innerPivot = $meta.InnerPivot
+        $outerPivot = $meta.OuterPivot
+
+        foreach ($IPivotKey in $DataObj.data.$OPivotKey.$Prop.Keys) {
             foreach ($mode in $modes) { 
-                if (-Not $DataObj.data.$Prop.$sortKey.$mode.stats) {
+                if (-Not $DataObj.data.$OPivotKey.$Prop.$IPivotKey.$mode.stats) {
                     continue
                 }
-                $tables += (Get-Culture).TextInfo.ToTitleCase("$mode Raw Dist. - $sortKey")
-                $TableTitle = (Get-Culture).TextInfo.ToTitleCase("$mode Dist. - $sortKey $sortProp")
-                $data = $dataObj.rawData.$mode
+                $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                $data       = $dataObj.rawData.$mode
                 $table = @{
                     "meta" = @{}
                     "rows" = @{
                         "Data Point" = @{}
                     }
                     "cols" = @{
-                        $TableTitle = @{
+                        $tableTitle = @{
                             "Time Segment" = 0
                             $Prop          = 1
                         }
                     }
                     "data" = @{
-                        $TableTitle = @{
+                        $tableTitle = @{
                             "Time Segment" = @{
                                 "Data Point" = @{}
                             }
@@ -1224,10 +1414,9 @@ function Format-Distribution {
                         if ($entry.$prop.GetType().Name -ne "Object[]") {
                             continue
                         }
-                        if ($entry.$sortProp -ne $sortKey) {
-                            continue
+                        if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey))) {
+                            $segmentData += $entry[$Prop][($i * $SubSampleRate) .. ((($i + 1) * $SubSampleRate) - 1)]
                         }
-                        $segmentData += $entry[$Prop][($i * $SubSampleRate) .. ((($i + 1) * $SubSampleRate) - 1)]
                     }
                     $segmentData = $segmentData | Sort
                     $time        = $i * $subSampleRate
@@ -1237,23 +1426,23 @@ function Format-Distribution {
                         $table.rows."Data Point".($row + 2) = $row + 2
                         $table.rows."Data Point".($row + 3) = $row + 3
                         $table.rows."Data Point".($row + 4) = $row + 4
-                        $table.data.$TableTitle."Time Segment"."Data Point".$row       = @{"value" = $time}
-                        $table.data.$TableTitle."Time Segment"."Data Point".($row + 1) = @{"value" = $time}
-                        $table.data.$TableTitle."Time Segment"."Data Point".($row + 2) = @{"value" = $time}
-                        $table.data.$TableTitle."Time Segment"."Data Point".($row + 3) = @{"value" = $time}
-                        $table.data.$TableTitle."Time Segment"."Data Point".($row + 4) = @{"value" = $time}
-                        $table.data.$TableTitle.$Prop."Data Point".$row = @{"value"       = $segmentData[0]}
-                        $table.data.$TableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[[int]($segmentData.Count / 4)]}
-                        $table.data.$TableTitle.$Prop."Data Point".($row + 2) = @{"value" = $segmentData[[int]($segmentData.Count / 2)]}
-                        $table.data.$TableTitle.$Prop."Data Point".($row + 3) = @{"value" = $segmentData[[int]((3 * $segmentData.Count) / 4)]}
-                        $table.data.$TableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
+                        $table.data.$tableTitle."Time Segment"."Data Point".$row       = @{"value" = $time}
+                        $table.data.$tableTitle."Time Segment"."Data Point".($row + 1) = @{"value" = $time}
+                        $table.data.$tableTitle."Time Segment"."Data Point".($row + 2) = @{"value" = $time}
+                        $table.data.$tableTitle."Time Segment"."Data Point".($row + 3) = @{"value" = $time}
+                        $table.data.$tableTitle."Time Segment"."Data Point".($row + 4) = @{"value" = $time}
+                        $table.data.$tableTitle.$Prop."Data Point".$row = @{"value"       = $segmentData[0]}
+                        $table.data.$tableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[[int]($segmentData.Count / 4)]}
+                        $table.data.$tableTitle.$Prop."Data Point".($row + 2) = @{"value" = $segmentData[[int]($segmentData.Count / 2)]}
+                        $table.data.$tableTitle.$Prop."Data Point".($row + 3) = @{"value" = $segmentData[[int]((3 * $segmentData.Count) / 4)]}
+                        $table.data.$tableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
                         $row += 5
                     } 
                     else {
                         foreach ($sample in $segmentData) {
                             $table.rows."Data Point".$row = $row
-                            $table.data.$TableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
-                            $table.data.$TableTitle.$Prop."Data Point".$row          = @{"value" = $sample}
+                            $table.data.$tableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
+                            $table.data.$tableTitle.$Prop."Data Point".$row          = @{"value" = $sample}
                             $row++
                         }
                     }
@@ -1263,6 +1452,22 @@ function Format-Distribution {
                 $table.meta.colLabelDepth = Get-TreeDepth $table.cols
                 $table.meta.dataHeight    = Get-TreeWidth $table.rows
                 $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+
+                if (-not $NoNewWorksheets) {
+                    if ($modes.Count -gt 1) {
+                        if ($mode -eq "baseline") {
+                            $worksheetName = Get-WorksheetTitle -BaseName "Base Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                        } 
+                        else {
+                            $worksheetName = Get-WorksheetTitle -BaseName "Test Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                        } 
+                    } 
+                    else {
+                        $worksheetName = Get-WorksheetTitle -BaseName "Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                    }
+                    
+                    $tables += $worksheetName
+                }
 
                 $tables += $table
             }
