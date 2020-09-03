@@ -7,6 +7,8 @@ $ORANGES = @(294092, 1681916, 6014716)
 
 $EPS = 0.0001
 
+$WorksheetMaxLen = 31
+
 $ABBREVIATIONS = @{
     "sessions" = "sess."
     "bufferLen" = "bufLen."
@@ -14,7 +16,6 @@ $ABBREVIATIONS = @{
     "protocol" = "protocol"
     "sendMethod" = "sndMthd" 
 }
-
 
 $THROUGHPUTS = @(1, 10, 25, 40, 50, 100, 200, 400)
 
@@ -94,10 +95,11 @@ function Format-RawData {
             }
         }
 
-        $meta = $DataObj.meta
+        $meta       = $DataObj.meta
         $innerPivot = $meta.InnerPivot
         $outerPivot = $meta.OuterPivot
-        $tables = @()
+        $tables     = @()
+
         if (-not $NoNewWorksheets) {
             $tables += Get-WorksheetTitle -BaseName "Raw Data" -OuterPivot $outerPivot -OPivotKey $OPivotKey
         }
@@ -106,9 +108,8 @@ function Format-RawData {
         }
 
         # Fill single array with all data and sort, label data as baseline/test if necessary
-        [Array] $data = @()
-        $baseData = $DataObj.rawData.baseline
-        foreach ($entry in $baseData) {
+        [Array] $data = @() 
+        foreach ($entry in $DataObj.rawData.baseline) {
             if ($meta.comparison) {
                 $entry.baseline = $true
             } 
@@ -118,8 +119,7 @@ function Format-RawData {
         }
 
         if ($meta.comparison) {
-            $testData = $DataObj.rawData.test
-            foreach ($entry in $testData) {
+            foreach ($entry in $DataObj.rawData.test) {
                 if (($OPivotKey -eq $NoPivot) -or ($entry.$outerPivot -eq $OPivotKey)) {
                     $data += $entry
                 }
@@ -157,23 +157,21 @@ function Format-RawData {
             $row = 0
 
             foreach ($entry in $data) {
+                $iPivotKey = $NoPivot
                 if ($innerPivot) {
-                    $IPivotKey = $entry.$innerPivot
-                } else {
-                    $IPivotKey = " "
+                    $iPivotKey = $entry.$innerPivot
                 }
 
                 # Add column labels to table
-                if (-not ($table.cols.$tableTitle.$innerPivot.Keys -contains $IPivotKey)) {
+                if (-not ($table.cols.$tableTitle.$innerPivot.Keys -contains $iPivotKey)) {
                     if ($meta.comparison) {
-                        $table.cols.$tableTitle.$innerPivot.$IPivotKey = @{
+                        $table.cols.$tableTitle.$innerPivot.$iPivotKey = @{
                             "baseline" = $col
-                            "test" = $col + 1
+                            "test"     = $col + 1
                         }
-                        $table.meta.columnFormats += $meta.format.$prop
-                        $table.meta.columnFormats += $meta.format.$prop
+                        $table.meta.columnFormats += @($meta.format.$prop, $meta.format.$prop) 
                         $col += 2
-                        $table.data.$TableTitle.$innerPivot.$IPivotKey = @{
+                        $table.data.$tableTitle.$innerPivot.$iPivotKey = @{
                             "baseline" = @{
                                 $prop = @{}
                             }
@@ -184,8 +182,8 @@ function Format-RawData {
                     } 
                     else {
                         $table.meta.columnFormats += $meta.format.$prop
-                        $table.cols.$tableTitle.$innerPivot.$IPivotKey  = $col
-                        $table.data.$tableTitle.$innerPivot.$IPivotKey  = @{
+                        $table.cols.$tableTitle.$innerPivot.$iPivotKey = $col
+                        $table.data.$tableTitle.$innerPivot.$iPivotKey = @{
                             $prop = @{}
                         }
                         $col += 1
@@ -202,26 +200,26 @@ function Format-RawData {
                 $row += 1
                 if ($meta.comparison) {
                     if ($entry.baseline) {
-                        $table.data.$TableTitle.$innerPivot.$IPivotKey.baseline.$prop.$filename = @{
+                        $table.data.$tableTitle.$innerPivot.$iPivotKey.baseline.$prop.$filename = @{
                             "value" = $entry.$prop
                         }
                     }
                     else {
-                        $table.data.$TableTitle.$innerPivot.$IPivotKey.test.$prop.$filename = @{
+                        $table.data.$tableTitle.$innerPivot.$iPivotKey.test.$prop.$filename = @{
                             "value" = $entry.$prop
                         }
                         $params = @{
-                            "Cell"    = $table.data.$TableTitle.$innerPivot.$IPivotKey.test.$prop.$filename
+                            "Cell"    = $table.data.$tableTitle.$innerPivot.$iPivotKey.test.$prop.$filename
                             "TestVal" = $entry.$prop
-                            "BaseVal" = $DataObj.data.$OPivotKey.$prop.$IPivotKey.baseline.stats.mean
+                            "BaseVal" = $DataObj.data.$OPivotKey.$prop.$iPivotKey.baseline.stats.mean
                             "Goal"    = $meta.goal.$prop
                         }
                         
-                        $table.data.$TableTitle.$innerPivot.$IPivotKey.test.$prop.$filename = Select-Color @params
+                        $table.data.$tableTitle.$innerPivot.$iPivotKey.test.$prop.$filename = Select-Color @params
                     }
                 } 
                 else {
-                    $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$filename = @{
+                    $table.data.$tableTitle.$innerPivot.$iPivotKey.$prop.$filename = @{
                         "value" = $entry.$prop
                     }
                 }
@@ -251,15 +249,33 @@ function Get-WorksheetTitle ($BaseName, $OuterPivot, $OPivotKey, $InnerPivot, $I
         $OAbv = $ABBREVIATIONS[$OuterPivot]
         $IAbv = $ABBREVIATIONS[$InnerPivot]
 
-        return "$BaseName - $OPivotKey $OAbv - $IPivotKey $IAbv"    
+        $name = "$BaseName - $OPivotKey $OAbv - $IPivotKey $IAbv"
+
+        if ($name.Length -gt $WorksheetMaxLen) {
+            $name = "$BaseName - $OPivotKey - $IPivotKey"
+        }
+
+        return $name
     } 
     elseif ($OuterPivot) {
         $OAbv = $ABBREVIATIONS[$OuterPivot]
-        return "$BaseName - $OPivotKey $OAbv"
+        $name = "$BaseName - $OPivotKey $OAbv"
+
+        if ($name.Length -gt $WorksheetMaxLen) {
+            $name = "$BaseName - $OPivotKey"
+        }
+
+        return $name
     } 
     elseif ($InnerPivot) {
         $IAbv = $ABBREVIATIONS[$InnerPivot]
-        return "$BaseName - $IPivotKey $IAbv"
+        $name = "$BaseName - $IPivotKey $IAbv"
+
+        if ($name.Length -gt $WorksheetMaxLen) {
+            $name = "$BaseName - $IPivotKey"
+        }
+
+        return $name 
     }
     else {
         return "$BaseName"

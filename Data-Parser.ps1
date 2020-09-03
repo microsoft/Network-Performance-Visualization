@@ -1,6 +1,15 @@
 ﻿$MBTOGB = 1 / 1000
 $BTOGB = 1 / (1024 * 1024 * 1024) 
 
+$SendMethodAbvs = @{
+    "blocking"     = "b"
+    "non-blocking" = "nb"
+    "ov_cp"        = "ovc"
+    "ov_event"     = "ove"
+    "ov_poll"      = "ovp"
+    "select"       = "sel"
+}
+
 
 ##
 # Parse-Files
@@ -119,8 +128,9 @@ function Parse-Files {
                 Write-Warning "Error at Parse-CTStraffic: failed to parse file $fileName"
                 Write-Error $_.Exception.Message
             }
-
-            $dataEntries += ,$dataEntry
+            if ($dataEntry) {
+                $dataEntries += ,$dataEntry
+            }
         }
 
         $rawData = @{
@@ -247,9 +257,11 @@ function Parse-CTStraffic ([string] $Filename) {
 ##
 # Parse-LATTE
 # ----------
-# This function parses a single file containing LATTE data. Each line containing
-# a latency sample is then extracted into an array, packaged into a dataEntry 
-# object, and returned.
+# This function parses a single file containing LATTE data. This function can parse files 
+# containing either raw LATTE data, or a LATTA summary. For raw data, each line contains
+# a latency sample which is extracted into an array, packaged into a dataEntry 
+# object, and returned. For summary data, the latency histogram and a few other measures 
+# are parsed from the file, packaged into a dataEntry object, and returned.
 #
 # Parameters
 # ----------
@@ -282,7 +294,7 @@ function Parse-LATTE ([string] $FileName) {
                 $dataEntry.protocol = $splitLine[-1]
             }
             if ($splitLine[0] -eq "SendMethod") {
-                $dataEntry.sendMethod = $splitLine[-1]
+                $dataEntry.sendMethod = $SendMethodAbvs[$splitLine[-1]]
             }
             if ($splitLine[0] -eq "MsgSize") {
                 $dataEntry.msgSize = $splitLine[-1] 
@@ -316,12 +328,28 @@ function Parse-LATTE ([string] $FileName) {
             $latency += ,[int]$line
         }
         $dataEntry.latency = $latency
+        $dataEntry.sendMethod = (($FileName.Split('\'))[-1].Split('.'))[2] 
         $dataEntry.protocol = (($FileName.Split('\'))[-1].Split('.'))[0].ToUpper()
     }
 
     return $dataEntry
 }
 
+
+##
+# Remove-EmptyStrings
+# -------------------
+# This function removes all empty strings from the given array
+#
+# Parameters
+# ----------
+# Arr (string[]) - Array of strings
+# 
+# Return
+# ------
+# Array of strings with all empty strings removed
+#
+##
 function Remove-EmptyStrings ($Arr) {
     $newArr = [Array] @()
     foreach ($val in $arr) {
