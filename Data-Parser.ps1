@@ -44,8 +44,10 @@ function Parse-Files {
                 Write-Warning "Error at Parse-NTTTCP: failed to parse file $fileName"
                 Write-Error $_.Exception.Message
             }
-
-            $dataEntries += ,$dataEntry
+            if ($dataEntry) {
+                $dataEntries += ,$dataEntry
+            }
+           
         }
 
         $rawData = @{
@@ -63,8 +65,7 @@ function Parse-Files {
                     "cycles"     = "0.00"
                     "% change"   = "+#.0%;-#.0%;0.0%"
                 }
-                "noTable"  = [Array] @("filename")
-                "sortProp" = "sessions"
+                "noTable"  = [Array] @("filename", "sessions", "bufferLen", "bufferCount")
             }
             "data" = $dataEntries
         }
@@ -98,8 +99,7 @@ function Parse-Files {
                     "latency"  = "#.0"
                     "% change" = "+#.0%;-#.0%;0.0%"
                 }
-                "sortProp" = "protocol"
-                "noTable"  = [Array]@("filename", "sendMethod")
+                "noTable"  = [Array]@("filename", "sendMethod", "protocol")
             }
             "data" = $dataEntries
         }
@@ -135,8 +135,7 @@ function Parse-Files {
                     "throughput" = "0.00"
                     "% change"   = "+#.0%;-#.0%;0.0%"
                 }
-                "sortProp" = "sessions"
-                "noTable"  = [Array]@("filename")
+                "noTable"  = [Array]@("filename", "sessions")
             }
             "data" = [Array]$dataEntries
         }
@@ -162,17 +161,30 @@ function Parse-Files {
 #
 ## 
 function Parse-NTTTCP ([string] $FileName) {
+    if ($FileName.Split(".")[-1] -ne "xml"){
+        return
+    }
+
     [XML]$file = Get-Content $FileName
+
+    if (-not $file) {
+        Write-Warning "Unable to parse file $FileName"
+        return
+    }
 
     [decimal] $cycles = $file.ChildNodes.cycles.'#text'
     [decimal] $throughput = $MBTOGB * [decimal]$file.ChildNodes.throughput[1].'#text'
     [int] $sessions = $file.ChildNodes.parameters.max_active_threads
+    [int] $bufferLen = $file.ChildNodes.bufferLen
+    [int] $bufferCount = $file.ChildNodes.io
 
     $dataEntry = @{
-        "sessions"   = $sessions
-        "throughput" = $throughput
-        "cycles"     = $cycles
-        "filename"   = $FileName
+        "sessions"    = $sessions
+        "throughput"  = $throughput
+        "cycles"      = $cycles
+        "filename"    = $FileName
+        "bufferLen"   = $bufferLen
+        "bufferCount" = $bufferCount
     }
 
     return $dataEntry
@@ -255,7 +267,7 @@ function Parse-LATTE ([string] $FileName) {
         "filename" = $FileName
     }
 
-    $splitline = Remove-EmptyStrings -Arr ($file[0]).split(' ')
+    $splitline = Remove-EmptyStrings -Arr (([Array]$file)[0]).split(' ')
     if ($splitline[0] -eq "Protocol") {
         $histogram = $false
 
@@ -294,59 +306,17 @@ function Parse-LATTE ([string] $FileName) {
 
     } 
     else {
+        
         [Array] $latency = @()
         foreach ($line in $file) {
+            if (-not ($line -match "\d+")) {
+                Write-Warning "Error Parsing file $FileName"
+                return
+            }
             $latency += ,[int]$line
         }
         $dataEntry.latency = $latency
-
         $dataEntry.protocol = (($FileName.Split('\'))[-1].Split('.'))[0].ToUpper()
-    }
-
-    return $dataEntry
-}
-
-
-function Parse-LATTE-Summary ([string] $FileName) {
-    $file = Get-Content $FileName
-
-    $dataEntry = @{
-        "filename" = $FileName
-    }
-
-    $histogram = $false
-
-    foreach ($line in $file) {
-        $splitLine = Remove-EmptyStrings -Arr $line.split(' ')
-
-        if ($splitLine.Count -eq 0) {
-            continue
-        }
-
-        if ($splitLine[0] -eq "Protocol") {
-            $dataEntry.protocol = $splitLine[-1]
-        }
-        if ($splitLine[0] -eq "SendMethod") {
-            $dataEntry.sendMethod = $splitLine[-1]
-        }
-        if ($splitLine[0] -eq "MsgSize") {
-            $dataEntry.msgSize = $splitLine[-1] 
-        }
-
-        if ($splitLine[0] -eq "Interval(usec)") {
-            $dataEntry.latency = [HashTable] @{} 
-            $histogram = $true
-            continue
-        }
-
-        if ($histogram) {
-            $dataEntry.latency.([Int32] $splitLine[0]) = [Int32] $splitLine[-1]
-        }
-    }
-
-    if (-not $histogram) {
-        Write-Warning "No histogram in file $filename"
-        return
     }
 
     return $dataEntry
