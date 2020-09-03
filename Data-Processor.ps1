@@ -44,25 +44,6 @@ function Process-Data {
 
         $meta = $processedDataObj.meta 
 
-        # Determine outer pivot values
-        if ($OuterPivot -ne "") {
-            foreach ($entry in $BaselineRawData.data) {
-                if (-Not ($processedDataObj.data.Keys -contains $entry.$OuterPivot)) {
-                    $processedDataObj.data.($entry.$OuterPivot) = @{}
-                }
-            }
-            if ($meta.comparison) {
-                foreach ($entry in $TestRawData.data) {
-                    if (-Not ($processedDataObj.data.Keys -contains $entry.$OuterPivot)) {
-                        $processedDataObj.data.($entry.$OuterPivot) = @{}
-                    }
-                }
-            }
-        } else {
-            $processedDataObj.data.$NoPivot = @{}
-        }
-
-
         $modes = @("baseline")
         foreach ($prop in ([Array]$BaselineRawData.data)[0].Keys) {
             if ($BaselineRawData.meta.noTable -contains $prop) {
@@ -81,18 +62,18 @@ function Process-Data {
                 }
             }
 
-            foreach ($OPivotKey in $processedDataObj.data.Keys) {
-                foreach ($IPivotKey in $processedDataObj.data.$OPivotKey.$prop.Keys) {
+            foreach ($oPivotKey in $processedDataObj.data.Keys) {
+                foreach ($iPivotKey in $processedDataObj.data.$oPivotKey.$prop.Keys) {
                     foreach ($mode in $modes) {
-                        if ($processedDataObj.data.$OPivotKey.$prop.$IPivotKey.$mode.orderedData) {
-                            Fill-Metrics -DataObj $processedDataObj -Property $prop -InnerPivotKey $IPivotKey -OuterPivotKey $OPivotKey -Mode $mode
+                        if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.orderedData) {
+                            Fill-Metrics -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                         }
-                        if ($processedDataObj.data.$OPivotKey.$prop.$IPivotKey.$mode.histogram) {
-                            Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -InnerPivotKey $IPivotKey -OuterPivotKey $OPivotKey -Mode $mode
+                        if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
+                            Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                         }
                     }
                     if ($TestRawData) {
-                        Calculate-PercentChange -DataObj $processedDataObj -Property $prop -InnerPivotKey $IPivotKey -OuterPivotKey $OPivotKey
+                        Calculate-PercentChange -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey
                     }
                 }
             }
@@ -105,12 +86,12 @@ function Process-Data {
     }
 }
 
-function Percentiles-FromHistogram ($DataObj, $Property, $InnerPivotKey, $OuterPivotKey, $Mode) {
+function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
     # Calculate cumulative density function
     $cdf = @{}
     $sumSoFar = 0
-    foreach ($bucket in ($DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.histogram.Keys | Sort)) {
-        $sumSoFar    += $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.histogram.$bucket
+    foreach ($bucket in ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.Keys | Sort)) {
+        $sumSoFar    += $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.$bucket
         $cdf.$bucket  = $sumSoFar 
     }
 
@@ -120,7 +101,7 @@ function Percentiles-FromHistogram ($DataObj, $Property, $InnerPivotKey, $OuterP
         $cdf.$bucket = 100 * ($cdf.$bucket / $sumSoFar)
     }
 
-    $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.percentilesHist = @{}
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentilesHist = @{}
     
     $j = 0
     $i = 0
@@ -131,7 +112,7 @@ function Percentiles-FromHistogram ($DataObj, $Property, $InnerPivotKey, $OuterP
         }
 
         if ($i -eq 0) {
-            $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.percentilesHist.($Percentiles[$j]) = $buckets[$i]
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentilesHist.($Percentiles[$j]) = $buckets[$i]
         } 
         else {
             $lowerVal    = $cdf.($buckets[$i - 1])
@@ -141,7 +122,7 @@ function Percentiles-FromHistogram ($DataObj, $Property, $InnerPivotKey, $OuterP
             
             $dist = ($Percentiles[$j] - $lowerVal) / ($upperVal - $lowerVal)
             
-            $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.percentilesHist.($Percentiles[$j]) = ($dist * $upperBucket) + ((1 - $dist) * $lowerBucket)
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentilesHist.($Percentiles[$j]) = ($dist * $upperBucket) + ((1 - $dist) * $lowerBucket)
         }
 
         $j++ 
@@ -149,97 +130,100 @@ function Percentiles-FromHistogram ($DataObj, $Property, $InnerPivotKey, $OuterP
 
 }
 
-function Calculate-PercentChange ($DataObj, $Property, $InnerPivotKey, $OuterPivotKey) {
-    $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey."% change" = @{}
+function Calculate-PercentChange ($DataObj, $Property, $IPivotKey, $OPivotKey) {
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change" = @{}
     foreach ($metricSet in @("stats", "percentiles", "percentilesHist")) {
-        if (-not $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.$metricSet) {
+        if (-not $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet) {
             continue
         }
 
-        $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey."% change".$metricSet = @{}
-        foreach ($metric in $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.$metricSet.Keys) {
-            $diff          =  $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.test.$metricSet.$metric - $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.$metricSet.$metric
-            if ($DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.$metricSet.$metric) {
-                $percentChange = 100 * ($diff / [math]::Abs( $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.$metricSet.$metric))
-                $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey."% change".$metricSet.$metric = $percentChange
+        $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change".$metricSet = @{}
+        foreach ($metric in $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet.Keys) {
+            $diff          =  $DataObj.data.$OPivotKey.$Property.$IPivotKey.test.$metricSet.$metric - $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet.$metric
+            if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet.$metric) {
+                $percentChange = 100 * ($diff / [math]::Abs( $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet.$metric))
+                $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change".$metricSet.$metric = $percentChange
             }
                   
         }
     }
 
-    if ($DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.histogram) {
-        $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey."% change".histogram = @{}
+    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram) {
+        $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change".histogram = @{}
         $baseTotal = 0
         $testTotal = 0
-        foreach ($bucket in $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.histogram.Keys) {
-            $baseTotal += $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.histogram.$bucket
-            $testTotal += $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.test.histogram.$bucket
+        foreach ($bucket in $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram.Keys) {
+            $baseTotal += $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram.$bucket
+            $testTotal += $DataObj.data.$OPivotKey.$Property.$IPivotKey.test.histogram.$bucket
         }
 
-        foreach ($bucket in $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.histogram.Keys) {
-            $basePercent = $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.baseline.histogram.$bucket / $baseTotal
-            $testPercent = $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.test.histogram.$bucket / $testTotal
+        foreach ($bucket in $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram.Keys) {
+            $basePercent = $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram.$bucket / $baseTotal
+            $testPercent = $DataObj.data.$OPivotKey.$Property.$IPivotKey.test.histogram.$bucket / $testTotal
             if ($basePercent -ne 0) {
                 $diff          = $testPercent - $basePercent
                 $percentChange = 100 * ($diff / $basePercent)
                 
-                $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey."% change".histogram.$bucket = $percentChange  
+                $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change".histogram.$bucket = $percentChange  
             }    
         }
     }
 }
 
 function Place-DataEntry ($DataObj, $Item, $Property, $InnerPivot, $OuterPivot, $Mode) {
-    $IPivotKey = $NoPivot
-    $OPivotKey = $NoPivot
+    $iPivotKey = $NoPivot
+    $oPivotKey = $NoPivot
 
     if ($InnerPivot) {
-        $IPivotKey = $item.$InnerPivot 
+        $iPivotKey = $item.$InnerPivot 
     } 
     if ($OuterPivot) {
-        $OPivotKey = $item.$OuterPivot    
+        $oPivotKey = $item.$OuterPivot    
     }
 
-    if (-not ($DataObj.data.$OPivotKey.Keys -contains $Property)) {
-        $DataObj.data.$OPivotKey.$Property = @{}
+    if (-not ($DataObj.data.Keys -contains $oPivotKey)) {
+        $DataObj.data.$oPivotKey = @{}
     }
-    if (-not ($DataObj.data.$OPivotKey.$Property.Keys -contains $IPivotKey)) {
-        $DataObj.data.$OPivotKey.$Property.$IPivotKey = @{}
+    if (-not ($DataObj.data.$oPivotKey.Keys -contains $Property)) {
+        $DataObj.data.$oPivotKey.$Property = @{}
     }
-    if (-not ($DataObj.data.$OPivotKey.$Property.$IPivotKey.Keys -contains $Mode)) {
-        $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode = @{}
+    if (-not ($DataObj.data.$oPivotKey.$Property.Keys -contains $iPivotKey)) {
+        $DataObj.data.$oPivotKey.$Property.$iPivotKey = @{}
+    }
+    if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.Keys -contains $Mode)) {
+        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode = @{}
     }
 
 
     if ($Item.$Property.GetType().Name -eq "Hashtable") {
-        Merge-Histograms -DataObj $DataObj -Histogram $Item.$Property -Property $Property -InnerPivotKey $IPivotKey -OuterPivotKey $OPivotKey -Mode $Mode
+        Merge-Histograms -DataObj $DataObj -Histogram $Item.$Property -Property $Property -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $Mode
     } 
     else {
-        if (-not ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.Keys -contains "orderedData")) {
-            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData = [Array] @()
+        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.Keys -contains "orderedData")) {
+            $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
         }
-        $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData += $Item.$Property
+        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $Item.$Property
     }
 }
 
 
-function Fill-Metrics ($DataObj, $Property, $InnerPivotKey, $OuterPivotKey, $Mode) {
-    $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.orderedData = $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.orderedData | Sort
-    if ($DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.orderedData.Count -gt 0) {
-        $stats = Measure-Stats -arr $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.orderedData
+function Fill-Metrics ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData | Sort
+    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count -gt 0) {
+        $stats = Measure-Stats -arr $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData
     } 
     else {
         $stats = @{}
     } 
-    $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.stats       = $stats
-    $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.percentiles = @{}
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.stats       = $stats
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentiles = @{}
 
-    if ($DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.orderedData.Count -gt 0) {
+    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count -gt 0) {
         foreach ($percentile in $Percentiles) {
-            $idx   = [int] (($percentile / 100) * ($DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.orderedData.Count - 1))
-            $value = $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.orderedData[$idx]
+            $idx   = [int] (($percentile / 100) * ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count - 1))
+            $value = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[$idx]
 
-            $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.percentiles.$percentile = $value
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentiles.$percentile = $value
         }
     }
 }
@@ -248,16 +232,16 @@ function Fill-Metrics ($DataObj, $Property, $InnerPivotKey, $OuterPivotKey, $Mod
 ##
 #
 ##
-function Merge-Histograms ($DataObj, $Histogram, $Property, $InnerPivotKey, $OuterPivotKey, $Mode) {
-    if (-Not ($DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.Keys -contains "histogram")) {
-        $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.histogram = @{}
+function Merge-Histograms ($DataObj, $Histogram, $Property, $IPivotKey, $OPivotKey, $Mode) {
+    if (-Not ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.Keys -contains "histogram")) {
+        $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram = @{}
     }
 
     foreach ($bucket in $Histogram.Keys) {
-        if (-not ($DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.histogram.Keys -contains $bucket)) {
-            $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.histogram.$bucket = $Histogram.$bucket
+        if (-not ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.Keys -contains $bucket)) {
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.$bucket = $Histogram.$bucket
         } else {
-            $DataObj.data.$OuterPivotKey.$Property.$InnerPivotKey.$Mode.histogram.$bucket += $Histogram.$bucket
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.$bucket += $Histogram.$bucket
         }
     }
 }
