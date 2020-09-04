@@ -1,16 +1,6 @@
 ﻿$MBTOGB = 1 / 1000
 $BTOGB = 1 / (1024 * 1024 * 1024) 
 
-$SendMethodAbvs = @{
-    "blocking"     = "b"
-    "non-blocking" = "nb"
-    "ov_cp"        = "ovc"
-    "ov_event"     = "ove"
-    "ov_poll"      = "ovp"
-    "select"       = "sel"
-}
-
-
 ##
 # Parse-Files
 # -----------
@@ -293,9 +283,6 @@ function Parse-LATTE ([string] $FileName) {
             if ($splitLine[0] -eq "Protocol") {
                 $dataEntry.protocol = $splitLine[-1]
             }
-            if ($splitLine[0] -eq "SendMethod") {
-                $dataEntry.sendMethod = $SendMethodAbvs[$splitLine[-1]]
-            }
             if ($splitLine[0] -eq "MsgSize") {
                 $dataEntry.msgSize = $splitLine[-1] 
             }
@@ -328,9 +315,10 @@ function Parse-LATTE ([string] $FileName) {
             $latency += ,[int]$line
         }
         $dataEntry.latency = $latency
-        $dataEntry.sendMethod = (($FileName.Split('\'))[-1].Split('.'))[2] 
         $dataEntry.protocol = (($FileName.Split('\'))[-1].Split('.'))[0].ToUpper()
     }
+
+    $dataEntry.sendMethod = (($FileName.Split('\'))[-1].Split('.'))[2]
 
     return $dataEntry
 }

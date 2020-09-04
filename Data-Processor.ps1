@@ -5,9 +5,12 @@ $NoPivot = " "
 ##
 # Process-Data
 # ------------
-# This function organizes raw data by property and sortProp (if applicable), 
-# and then calculates statistics and percentiles over each sub-category of data. Processed data, 
-# the original raw data, and some meta data are then stored together in an object and returned. 
+# This function organizes raw data into subsets, and then calculates statistics and percentiles 
+# over each sub-category of data. Subsets are delineated by three values: a Property, an 
+# innerPivot value (inner pivot key), and an outerPivot value (outer pivot key). Hence, values are extracted from
+# raw dataEntry objects and placed into subsets based on the property name whose value is being extracted and the values 
+# of pivot properties of the same dataEntry object. Processed data, the original raw data, and some meta data are 
+# then stored together in an object and returned. 
 #
 # Parameters
 # ----------
@@ -52,13 +55,13 @@ function Process-Data {
 
             # Extract property values from dataEntry objects and place values in the correct spot within the processedData object
             foreach($item in $BaselineRawData.data) {
-                Place-DataEntry -DataObj $processedDataObj -Item $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "baseline"
+                Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "baseline"
             }
 
             if ($TestRawData) {
                 $modes += "test"
                 foreach ($item in $TestRawData.data) {
-                    Place-DataEntry -DataObj $processedDataObj -Item $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "test"
+                    Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "test"
                 }
             }
 
@@ -66,7 +69,7 @@ function Process-Data {
                 foreach ($iPivotKey in $processedDataObj.data.$oPivotKey.$prop.Keys) {
                     foreach ($mode in $modes) {
                         if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.orderedData) {
-                            Fill-Metrics -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
+                            Calculate-Metrics -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                         }
                         if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
                             Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
@@ -86,6 +89,122 @@ function Process-Data {
     }
 }
 
+
+##
+# Place-DataEntry
+# ---------------
+# This function extracts raw data values from dataEntry objects, and places them in the correct
+# position within the processed data object.
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Processed data object
+# DataEntry (HashTable) - DataEntry object whose data is being added to processed data object
+# Property (String) - Name of the property whose value should be extracted from the dataEntry
+# InnerPivot (String) - Name of the property to use as an inner pivot
+# OuterPivot (String) - Name of the property to use as an outer pivot
+# Mode (String) - Mode (baseline/test) of the given dataEntry object
+# 
+# Return
+# ------
+# None
+#
+function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPivot, $Mode) {
+    $iPivotKey = $NoPivot
+    $oPivotKey = $NoPivot
+
+    if ($InnerPivot) {
+        $iPivotKey = $DataEntry.$InnerPivot 
+    } 
+    if ($OuterPivot) {
+        $oPivotKey = $DataEntry.$OuterPivot    
+    }
+
+    if (-not ($DataObj.data.Keys -contains $oPivotKey)) {
+        $DataObj.data.$oPivotKey = @{}
+    }
+    if (-not ($DataObj.data.$oPivotKey.Keys -contains $Property)) {
+        $DataObj.data.$oPivotKey.$Property = @{}
+    }
+    if (-not ($DataObj.data.$oPivotKey.$Property.Keys -contains $iPivotKey)) {
+        $DataObj.data.$oPivotKey.$Property.$iPivotKey = @{}
+    }
+    if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.Keys -contains $Mode)) {
+        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode = @{}
+    }
+
+
+    if ($Item.$Property.GetType().Name -eq "Hashtable") {
+        Merge-Histograms -DataObj $DataObj -Histogram $DataEntry.$Property -Property $Property -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $Mode
+    } 
+    else {
+        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.Keys -contains "orderedData")) {
+            $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
+        }
+        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $DataEntry.$Property
+    }
+}
+
+
+##
+# Calculate-Metrics
+# -----------------
+# This function uses the orderedData field to calculate metrics of a specified data subset.
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Processed data object
+# Property (String) - Name of the property of the data subset whose metrics are being calculated
+# IPivotKey (String) - Value of the inner pivot of the data subset whose metrics are being calculated
+# OPivotKey (String) - Value of the outer pivot of the data subset whose metrics are being calculated
+# Mode (String) - Mode (baseline/test) of the data subset whose histogram is being used
+#
+# Return
+# ------
+# None
+# 
+##
+function Calculate-Metrics ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData | Sort
+    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count -gt 0) {
+        $stats = Measure-Stats -arr $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData
+    } 
+    else {
+        $stats = @{}
+    } 
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.stats       = $stats
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentiles = @{}
+
+    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count -gt 0) {
+        foreach ($percentile in $Percentiles) {
+            $idx   = [int] (($percentile / 100) * ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count - 1))
+            $value = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[$idx]
+
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentiles.$percentile = $value
+        }
+    }
+}
+
+
+##
+# Percentiles-FromHistogram
+# -------------------------
+# This function uses a histogram stored in the processed data object to calculate approximate
+# percentiles for a subset of data.
+# 
+# Parameters
+# ----------
+# DataObj (HashTable) - Processed data object
+# Property (String) - Name of the property of the data subset whose histogram is being used (ex: latency)
+# IPivotKey (String) - Value of the inner pivot of the data subset whose histogram is being used
+# OPivotKey (String) - Value of the outer pivot of the data subset whose histogram is being used
+# Mode (String) - Mode (baseline/test) of the data subset whose histogram is being used
+#
+# Return
+# ------
+# None
+#
+##
 function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
     # Calculate cumulative density function
     $cdf = @{}
@@ -130,6 +249,24 @@ function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey,
 
 }
 
+
+##
+# Calculate-PercentChange
+# -----------------------
+# This function calculates the percent change for all metrics of a given subset of data. 
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Processed data object
+# Property (String) - Name of the property of the data subset for which % change is being calculated
+# IPivotKey (String) - Value of the inner pivot of the data subset for which % change is being calculated
+# OPivotKey (String) - Value of the outer pivot of the data subset for which % change is being calculated
+#
+# Return 
+# ------
+# None
+#
+##
 function Calculate-PercentChange ($DataObj, $Property, $IPivotKey, $OPivotKey) {
     $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change" = @{}
     foreach ($metricSet in @("stats", "percentiles", "percentilesHist")) {
@@ -170,66 +307,24 @@ function Calculate-PercentChange ($DataObj, $Property, $IPivotKey, $OPivotKey) {
     }
 }
 
-function Place-DataEntry ($DataObj, $Item, $Property, $InnerPivot, $OuterPivot, $Mode) {
-    $iPivotKey = $NoPivot
-    $oPivotKey = $NoPivot
-
-    if ($InnerPivot) {
-        $iPivotKey = $item.$InnerPivot 
-    } 
-    if ($OuterPivot) {
-        $oPivotKey = $item.$OuterPivot    
-    }
-
-    if (-not ($DataObj.data.Keys -contains $oPivotKey)) {
-        $DataObj.data.$oPivotKey = @{}
-    }
-    if (-not ($DataObj.data.$oPivotKey.Keys -contains $Property)) {
-        $DataObj.data.$oPivotKey.$Property = @{}
-    }
-    if (-not ($DataObj.data.$oPivotKey.$Property.Keys -contains $iPivotKey)) {
-        $DataObj.data.$oPivotKey.$Property.$iPivotKey = @{}
-    }
-    if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.Keys -contains $Mode)) {
-        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode = @{}
-    }
-
-
-    if ($Item.$Property.GetType().Name -eq "Hashtable") {
-        Merge-Histograms -DataObj $DataObj -Histogram $Item.$Property -Property $Property -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $Mode
-    } 
-    else {
-        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.Keys -contains "orderedData")) {
-            $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
-        }
-        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $Item.$Property
-    }
-}
-
-
-function Fill-Metrics ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
-    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData | Sort
-    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count -gt 0) {
-        $stats = Measure-Stats -arr $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData
-    } 
-    else {
-        $stats = @{}
-    } 
-    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.stats       = $stats
-    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentiles = @{}
-
-    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count -gt 0) {
-        foreach ($percentile in $Percentiles) {
-            $idx   = [int] (($percentile / 100) * ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count - 1))
-            $value = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[$idx]
-
-            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentiles.$percentile = $value
-        }
-    }
-}
-
 
 ##
+# Merge-Histograms
+# ----------------
+# This function merges a given histogram with a specified data subset's histogram in the processed data object. 
+# 
+# Parameters
+# ----------
+# DataObj (HashTable) - Processed data object
+# Histogram (HashTable) - New histogram to merge with the specified data subset's histogram
+# Property (String) - Name of the property of the data subset for which histograms are being merged
+# IPivotKey (String) - Value of the inner pivot of the data subset for which histograms are being merged
+# OPivotKey (String) - Value of the outer pivot of the data subset for which histograms are being merged
+# Mode (String) - Mode (baseline/test) of the data subset whose histograms are being merged
+#
+# Return
+# ------
+# None 
 #
 ##
 function Merge-Histograms ($DataObj, $Histogram, $Property, $IPivotKey, $OPivotKey, $Mode) {

@@ -133,7 +133,7 @@ function New-Visualization {
         } 
         $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
     }
-    $fileName = Create-ExcelFile -Tables $tables -SaveDir $SaveDir -Tool $tool -SavePath $SavePath 
+    $fileName = Create-ExcelFile -Tables $tables -SavePath $SavePath 
     Write-Host "Created report at $filename"
 }
 
