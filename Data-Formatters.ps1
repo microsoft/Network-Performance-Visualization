@@ -446,6 +446,7 @@ function Format-Stats {
                     }
                 }
             }
+
             if ($noStats) {
                 continue
             }

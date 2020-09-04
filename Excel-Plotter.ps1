@@ -9,11 +9,8 @@
 # 
 # Parameters
 # ----------
-# Tables (HashTable[]) - Array of table objects
-# SaveDir (String) - Directory to save excel workbook w/ auto-generated name at if no savePath is provided
-# Tool (String) - Name of tool for which a report is being created
-# SavePath (String) - Path and filename for where to save excel workbook, if none is supplied a file name is 
-#                     auto-generated
+# Tables (HashTable[]) - Array of table objects 
+# SavePath (String) - Path and filename for where to save excel workbook
 #
 # Returns
 # -------
@@ -23,58 +20,36 @@
 function Create-ExcelFile {
     param (
         [Parameter(Mandatory=$true)] 
-        [PSObject[]]$Tables,
+        [PSObject[]]$Tables, 
 
-        [Parameter()]
-        [String] $SaveDir="$home\Documents",
-
-        [Parameter(Mandatory=$true)]
-        [string]$Tool,
-
-        [Parameter()]
-        [string]$SavePath = $null
+        [Parameter(Mandatory)]
+        [string]$SavePath
     )
-
-    if  ( (-not $SavePath) -and !( Test-Path -Path $SaveDir -PathType "Container" ) ) { 
-        New-Item -Path $SaveDir -ItemType "Container" -ErrorAction Stop | Out-Null
-    }
-
-    $date = Get-Date -UFormat "%Y-%m-%d_%H-%M-%S"
-    if ($SavePath) {
-        $excelFile = $SavePath
-    } 
-    else {
-        $excelFile = "$SaveDir\$Tool-Report-$($date).xlsx"
-    }
-    $excelFile = $excelFile.Replace(" ", "_")
 
     try {
         $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
-        $excelObject.Visible = $true
+        
+        # Can be set to true for debugging purposes
+        $excelObject.Visible = $false
+
         $workbookObject = $excelObject.Workbooks.Add()
         $worksheetObject = $workbookObject.Worksheets.Item(1)
             
-        [int]$rowOffset = 1
-        [int] $chartNum = 1
+        $rowOffset = 1
+        $chartNum  = 1
         $first = $true
         foreach ($table in $Tables) {
             if ($table.GetType().Name -eq "string") {
                 if ($first) {
                     $first = $false
-                } else {
-                    $worksheetObject.UsedRange.Columns.Autofit() | Out-Null
-                    $worksheetObject.UsedRange.Rows.Autofit() | Out-Null
-                    foreach ($column in $worksheetObject.UsedRange.Columns) {
-                        if ($column.ColumnWidth -lt $MINCOLUMNWIDTH) {
-                            $column.ColumnWidth = $MINCOLUMNWIDTH
-                        }
-                    }
-
+                } 
+                else {
+                    Fit-Cells -Worksheet $worksheetObject 
                     $worksheetObject = $workbookObject.worksheets.Add()
                 }
                 $worksheetObject.Name = $table
                 $chartNum = 1
-                [int]$rowOffset = 1
+                $rowOffset = 1
                 continue
             }
 
@@ -89,9 +64,9 @@ function Create-ExcelFile {
             $rowOffset += $table.meta.colLabelDepth + $table.meta.dataHeight + 1
         }
         
-        $worksheetObject.UsedRange.Columns.Autofit() | Out-Null
+        Fit-Cells -Worksheet $worksheetObject
 
-        $workbookObject.SaveAs($excelFile,51) | Out-Null # http://msdn.microsoft.com/en-us/library/bb241279.aspx 
+        $workbookObject.SaveAs($savePath, $XLENUM.xlOpenXMLWorkbook) | Out-Null  
         $workbookObject.Saved = $true 
         $workbookObject.Close() | Out-Null
         [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject) | Out-Null  
@@ -101,12 +76,36 @@ function Create-ExcelFile {
         [System.GC]::Collect() | Out-Null
         [System.GC]::WaitForPendingFinalizers() | Out-Null
 
-        return [string]$excelFile
+        return [string]$savePath
     } 
     catch {
         Write-Warning "Error at Create-ExcelFile"
         Write-Error $_.Exception.Message
     } 
+}
+
+
+##
+# Fit-Cells
+# ---------
+# This function fits the width and height of cells for a given worksheet
+# 
+# Parameters
+# ----------
+# Worksheet (ComObject) - Object representing an excel worksheet
+#
+# Return
+# ------
+# None
+##
+function Fit-Cells ($Worksheet) {
+    $Worksheet.UsedRange.Columns.Autofit() | Out-Null
+    $Worksheet.UsedRange.Rows.Autofit() | Out-Null
+    foreach ($column in $Worksheet.UsedRange.Columns) {
+        if ($column.ColumnWidth -lt $MINCOLUMNWIDTH) {
+            $column.ColumnWidth = $MINCOLUMNWIDTH
+        }
+    }
 }
 
 
@@ -152,7 +151,7 @@ function Format-ExcelSheet ($Worksheet, $Table, $RowOffset) {
     }
     $selection = $Worksheet.Range($Worksheet.Cells($RowOffset, 1), $Worksheet.Cells($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $Table.meta.rowLabelDepth + $Table.meta.dataWidth))
     $selection.select() | Out-Null
-    $selection.BorderAround(1, 4) | Out-Null
+    $selection.BorderAround($XLENUM.xlContinuous, $XLENUM.xlThick) | Out-Null
 }
 
 
@@ -175,7 +174,7 @@ function Format-ExcelSheet ($Worksheet, $Table, $RowOffset) {
 # None
 #
 ##
-function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
+function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
     $chart = $Worksheet.Shapes.AddChart().Chart 
 
     $width = $Table.meta.dataWidth + $Table.meta.rowLabelDepth
@@ -237,26 +236,26 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
     if ($Table.chartSettings.axisSettings) {
         foreach($axisNum in $Table.chartSettings.axisSettings.Keys) {
             if ($Table.chartSettings.axisSettings.$axisNum.min) { 
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MinimumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.min
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MinimumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.min
             }
             if ($Table.chartSettings.axisSettings.$axisNum.tickLabelSpacing) {
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).TickLabelSpacing = $Table.chartSettings.axisSettings.$axisNum.tickLabelSpacing
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).TickLabelSpacing = $Table.chartSettings.axisSettings.$axisNum.tickLabelSpacing
             }
             if ($Table.chartSettings.axisSettings.$axisNum.max) { 
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).MaximumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.max
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MaximumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.max
             }
             if ($Table.chartSettings.axisSettings.$axisNum.logarithmic) {
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).scaleType = $XLENUM.xlScaleLogarithmic
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).scaleType = $XLENUM.xlScaleLogarithmic
             }
             if ($Table.chartSettings.axisSettings.$axisNum.title) {
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).HasTitle = $true
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).AxisTitle.Caption = $Table.chartSettings.axisSettings.$axisNum.title
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).HasTitle = $true
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).AxisTitle.Caption = $Table.chartSettings.axisSettings.$axisNum.title
             }
             if ($Table.chartSettings.axisSettings.$axisNum.minorGridlines) {
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).HasMinorGridlines = $true
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).HasMinorGridlines = $true
             }
             if ($Table.chartSettings.axisSettings.$axisNum.majorGridlines) {
-                $Worksheet.chartobjects($chartNum).chart.Axes($axisNum).HasMajorGridlines = $true
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).HasMajorGridlines = $true
             }
         }
     }
@@ -270,8 +269,8 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $chartNum) {
         $chart.HasLegend = $false
     }
 
-    $Worksheet.Shapes.Item("Chart " + $chartNum ).top = $Worksheet.Cells($StartRow, $StartCol + $width + 1).top
-    $Worksheet.Shapes.Item("Chart " + $chartNum ).left = $Worksheet.Cells($StartRow, $StartCol + $width + 1).left
+    $Worksheet.Shapes.Item("Chart " + $ChartNum ).top = $Worksheet.Cells($StartRow, $StartCol + $width + 1).top
+    $Worksheet.Shapes.Item("Chart " + $ChartNum ).left = $Worksheet.Cells($StartRow, $StartCol + $width + 1).left
 }
 
 
@@ -325,7 +324,7 @@ function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
 # Row2 (int) - Row index of bottom right cell of range to merge
 # Col2 (int) - Column index of bottom right cell of range to merge
 #
-# Return 
+# Return
 # ------
 # None
 #
