@@ -21,7 +21,7 @@ In the table above, there is a single column displaying baseline metrics, and a 
 <p align="center">
   <img src="/images/throughput-one-pivot.PNG" title="Throughput One Pivot" width=50% height=50%>
 </p>
-In this second table, throughput samples have been grouped into subsets depending on the number of sessions used when making each throughput measurement. Now there are multiple columns displaying test and baseline metrics, with each set of columns being labeled a pivot variable value. Using a pivot lets us compare performance statistics while holding constant certain parameters, such as sessions in this case. Lastly, here is the same data again, this time visualized using two pivot variables:
+In this second table, throughput samples have been grouped into subsets depending on the number of sessions used when making each throughput measurement. Now there are multiple columns displaying test and baseline metrics, with each set of columns being labeled with a pivot variable value. Using a pivot lets us compare performance statistics while holding constant certain parameters, such as sessions in this case. Lastly, here is the same data again, this time visualized using two pivot variables:
 <p align="center">
   <img src="/images/throughput-two-pivots.PNG" title="Throughput Two Pivots" width=50% height=50%>
 </p>
