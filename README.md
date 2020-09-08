@@ -1,7 +1,7 @@
 # Description
 Network-Data-Visualization is a tool used to visualize the data produced by various network performance analysis tools. Currently, the project supports the tools NTTTCP, LATTE, and CTStraffic.
 
-Though these tools are quite capable, reading and interpreting their raw output files is a tedious and time consumimg task. Additionally, network performance tests are often run for multiple iterations in order to mitigate the effects of random variance, and this can create directories full of these dense data files.   
+NTTTCP, LATTE, and CTStraffic are tools used to measure network performance. These tools are quite capable, but they produce dense raw data files as output, and these files can be difficult to draw meaningful conclusions from. Additionally, network performance tests are often run for multiple iterations in order to mitigate the effects of random variance, and this generates directories full of these dense data files. Compiling the network performance data from a set of tests into a usable report can take a group of engineers several days. This is a huge bottleneck which drastically slows the development and testing cycle for networking developers. This visualizer aims to alleviate this pain point.   
 
 Given a directory full of NTTTCP, LATTE, or CTStraffic data files, this tool will parse the raw data, analyze it, and then create tables and charts in excel which provide useful visualizations of that data. 
 
@@ -11,7 +11,8 @@ Given a directory full of NTTTCP, LATTE, or CTStraffic data files, this tool wil
   <img src="/images/latency-percentiles.PNG" title="Latency Percentiles" width=75% height=75%>
 </p>
 
-The tool can aggregate data from multiple iterations of network performance monitoring tools and it can be given two directories in order to create side by side comparisons of performance measures before and after system changes. 
+The tool can aggregate data from multiple iterations of network performance monitoring tools and it can be given two directories in order to create side by side comparisons of performance measures before and after system changes. This tool also allows for the selection of pivot variables which are used to subdivide and organize data when the tool is generating reports. For example, here is a table displaying throughput statistics with no pivot variables:
+
 
 More info is available in the [design document](https://microsoft.sharepoint.com/:w:/r/teams/STACKTeam-CoreNetworkingMobileConnectivityPeripheralsStackSe/_layouts/15/Doc.aspx?sourcedoc=%7B488D9050-2E8D-40BE-BA5E-F2DE79646C2A%7D&file=Design%20Document.docx&action=default&mobileredirect=true)
 
