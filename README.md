@@ -29,6 +29,8 @@ In the example above, two pivot variables are used: sessions and buffer count. J
 
 Using pivot variables allows for the comparison of data while holding constant certain chosen parameters. This parameter isolation can help pinpoint the causes of performance issues. Pivot variables are optional, and the tool supports using zero, one or two pivot variables. 
 
+For more info, visit the tool's [Design Document](https://microsoft.sharepoint.com/:w:/t/STACKTeam-CoreNetworkingMobileConnectivityPeripheralsStackSe/EVCQjUiNLr5Aul7y3nlkbCoBVI3IinXBuFyVGHGZKm6Jlw?e=n2E3gB)
+
 # Installation
 ## Manual Installation
 Download this repo to your machine, and then move the Network-Performance-Visualization folder to C:\Program Files\WindowsPowerShell\Modules. After moving the folder, PowerShell should automatically install the module. You can double check that everything was installed correctly by running the command
