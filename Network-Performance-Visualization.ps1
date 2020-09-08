@@ -12,7 +12,7 @@ $LATTEPivots = @("", "protocol", "sendMethod")
 $CTSPivots = @("", "sessions")
 
 
-function New-Visualization {
+function New-NetworkVisualization {
     <#
     .Description
     This cmdlet parses raw data files produced from various network performance monitoring tools, processes them, and produces 
