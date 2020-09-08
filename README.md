@@ -13,7 +13,7 @@ Given a directory full of NTTTCP, LATTE, or CTStraffic data files, this tool wil
 
 The tool can aggregate data from multiple iterations of network performance monitoring tools and it can be given two directories in order to create side by side comparisons of performance measures before and after system changes. 
 
-
+More info is available in the [design document](https://microsoft.sharepoint.com/:w:/r/teams/STACKTeam-CoreNetworkingMobileConnectivityPeripheralsStackSe/_layouts/15/Doc.aspx?sourcedoc=%7B488D9050-2E8D-40BE-BA5E-F2DE79646C2A%7D&file=Design%20Document.docx&action=default&mobileredirect=true)
 
 # Installation
 ## Manual Installation
