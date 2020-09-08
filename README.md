@@ -25,9 +25,9 @@ In this second table, throughput samples have been grouped into subsets dependin
 <p align="center">
   <img src="/images/throughput-two-pivots.PNG" title="Throughput Two Pivots" width=50% height=50%>
 </p>
-In the example above, two pivot variables are used: sessions and buffer count. Just like the previous example, the generated tables have separate columns for each sessions value, but now a separate table is generated for each buffer count value. The pivot variable which splits tables into multiple columns is called the `InnerPivot` and the pivot variable which causes multiple tables to be created is called the `OuterPivot`. 
+In the example above, two pivot variables are used: sessions and buffer count. Just like the previous example, the generated tables have separate columns for each sessions value, but now a separate table is generated for each buffer count value. The pivot variable which splits tables into multiple columns is called the InnerPivot and the pivot variable which causes multiple tables to be created is called the OuterPivot. 
 
-More info is available in the [design document](https://microsoft.sharepoint.com/:w:/r/teams/STACKTeam-CoreNetworkingMobileConnectivityPeripheralsStackSe/_layouts/15/Doc.aspx?sourcedoc=%7B488D9050-2E8D-40BE-BA5E-F2DE79646C2A%7D&file=Design%20Document.docx&action=default&mobileredirect=true)
+Using pivot variables allows for the comparison of data while holding constant certain chosen parameters. This parameter isolation can help pinpoint the causes of performance issues.
 
 # Installation
 ## Manual Installation
@@ -37,10 +37,10 @@ Get-Module -ListAvailable
 ```
 and checking that `Network-Performance-Visualization` is listed among the available modules.
 # Usage
-The `Network-Performance-Visualization` module exports one command called `New-Visualization`.  
+The `Network-Performance-Visualization` module exports one command called `New-NetworkVisualization`.  
 For help and options when running this command directly, use:
 ```PowerShell
-Get-Help New-Visualization
+Get-Help New-NetworkVisualization
 ```
 # Contributing
 
