@@ -11,7 +11,20 @@ Given a directory full of NTTTCP, LATTE, or CTStraffic data files, this tool wil
   <img src="/images/latency-percentiles.PNG" title="Latency Percentiles" width=75% height=75%>
 </p>
 
-The tool can aggregate data from multiple iterations of network performance monitoring tools and it can be given two directories in order to create side by side comparisons of performance measures before and after system changes. This tool also allows for the selection of pivot variables which are used to subdivide and organize data when the tool is generating reports. For example, here is a table displaying throughput statistics with no pivot variables:
+The tool can aggregate data from multiple iterations of network performance monitoring tools and it can be given two directories in order to create side by side comparisons of performance measures before and after system changes. 
+
+This tool also allows for the selection of pivot variables which are used to subdivide and organize data when the tool is generating reports. For example, here is a table displaying throughput statistics with no pivot variables:
+<p align="center">
+  <img src="/images/throughput-no-pivot.PNG" title="Throughput No Pivot" width=35% height=35%>
+</p>
+In the table above, there is a single column displaying baseline metrics, and a single column displaying the test metrics. Here is the same data, visualized using sessions as the pivot variable:
+<p align="center">
+  <img src="/images/throughput-one-pivot.PNG" title="Throughput One Pivot" width=50% height=50%>
+</p>
+In this second table, throughput samples have been grouped into subsets depending on the number of sessions used when making each throughput measurement. Now there are multiple columns displaying test and baseline metrics, with each set of columns being labeled a pivot variable value. Using a pivot lets us compare performance statistics while holding constant certain parameters, such as sessions in this case. Lastly, here is the same data again, this time visualized using two pivot variables:
+<p align="center">
+  <img src="/images/throughput-two-pivots.PNG" title="Throughput Two Pivots" width=50% height=50%>
+</p>
 
 
 More info is available in the [design document](https://microsoft.sharepoint.com/:w:/r/teams/STACKTeam-CoreNetworkingMobileConnectivityPeripheralsStackSe/_layouts/15/Doc.aspx?sourcedoc=%7B488D9050-2E8D-40BE-BA5E-F2DE79646C2A%7D&file=Design%20Document.docx&action=default&mobileredirect=true)
