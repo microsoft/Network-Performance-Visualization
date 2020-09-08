@@ -27,7 +27,7 @@ In this second table, throughput samples have been grouped into subsets dependin
 </p>
 In the example above, two pivot variables are used: sessions and buffer count. Just like the previous example, the generated tables have separate columns for each sessions value, but now a separate table is generated for each buffer count value. The pivot variable which splits tables into multiple columns is called the InnerPivot and the pivot variable which causes multiple tables to be created is called the OuterPivot. 
 
-Using pivot variables allows for the comparison of data while holding constant certain chosen parameters. This parameter isolation can help pinpoint the causes of performance issues.
+Using pivot variables allows for the comparison of data while holding constant certain chosen parameters. This parameter isolation can help pinpoint the causes of performance issues. Pivot variables are optional, and the tool supports using zero, one or two pivot variables. 
 
 # Installation
 ## Manual Installation
