@@ -14,17 +14,23 @@ Given a directory full of NTTTCP, LATTE, or CTStraffic data files, this tool wil
 The tool can aggregate data from multiple iterations of network performance monitoring tools and it can be given two directories in order to create side by side comparisons of performance measures before and after system changes. 
 
 This tool also allows for the selection of pivot variables which are used to subdivide and organize data when the tool is generating reports. For example, here is a table displaying throughput statistics with no pivot variables:
+
 <p align="center">
   <img src="/images/throughput-no-pivot.PNG" title="Throughput No Pivot" width=35% height=35% />
 </p>
+
 In the table above, there is a single column displaying baseline metrics, and a single column displaying the test metrics. Here is the same data, visualized using sessions as the pivot variable:
+
 <p align="center">
   <img src="/images/throughput-one-pivot.PNG" title="Throughput One Pivot" width=50% height=50% />
 </p>
+
 In this second table, throughput samples have been grouped into subsets depending on the number of sessions used when making each throughput measurement. Now there are multiple columns displaying test and baseline metrics, with each set of columns being labeled with a pivot variable value. Using a pivot lets us compare performance statistics while holding constant certain parameters, such as sessions in this case. Lastly, here is the same data again, this time visualized using two pivot variables:
+
 <p align="center">
   <img src="/images/throughput-two-pivots.PNG" title="Throughput Two Pivots" width=50% height=50% />
 </p>
+
 In the example above, two pivot variables are used: sessions and buffer count. Just like the previous example, the generated tables have separate columns for each sessions value, but now a separate table is generated for each buffer count value. The pivot variable which splits tables into multiple columns is called the InnerPivot and the pivot variable which causes multiple tables to be created is called the OuterPivot. 
 
 Using pivot variables allows for the comparison of data while holding constant certain chosen parameters. This parameter isolation can help pinpoint the causes of performance issues. Pivot variables are optional, and the tool supports using zero, one or two pivot variables. 
