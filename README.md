@@ -29,7 +29,7 @@ In the example above, two pivot variables are used: sessions and buffer count. J
 
 Using pivot variables allows for the comparison of data while holding constant certain chosen parameters. This parameter isolation can help pinpoint the causes of performance issues. Pivot variables are optional, and the tool supports using zero, one or two pivot variables. 
 
-For more info, visit the tool's [Design Document](https://microsoft.sharepoint.com/:w:/t/STACKTeam-CoreNetworkingMobileConnectivityPeripheralsStackSe/EVCQjUiNLr5Aul7y3nlkbCoBVI3IinXBuFyVGHGZKm6Jlw?e=n2E3gB)
+For more info, visit the tool's [Design Document](https://www.office.com/launch/word/content?auth=2&drive=b!XVugkRto9k-yWLd-1lV3x91xpWb7YetMkwkg78JGrGIq2EXXA729QpXyvQ_xDbv_&item=01EFWYSENNQ7FN6R6Z25DKTB3CARUIDOKR&file=https:%2F%2Fmicrosoft-my.sharepoint.com%2Fpersonal%2Ft-lucgon_microsoft_com%2FDocuments%2FDocument.docx%3Fweb%3D1)
 
 # Installation
 ## Manual Installation
