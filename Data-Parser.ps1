@@ -284,7 +284,7 @@ function Parse-LATTE ([string] $FileName) {
                 $dataEntry.protocol = $splitLine[-1]
             }
             if ($splitLine[0] -eq "MsgSize") {
-                $dataEntry.msgSize = $splitLine[-1] 
+                $dataEntry.msgSize = $splitLine[-1]  # Not currently used for anything
             }
 
             if ($splitLine[0] -eq "Interval(usec)") {

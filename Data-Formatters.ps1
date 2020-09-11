@@ -1424,46 +1424,68 @@ function Format-Distribution {
                 # Add row labels and fill data in table
                 $i   = 0
                 $row = 0
-                $NumSegments = $NumSamples / $SubSampleRate
-                while ($i -lt $NumSegments) {
-                    [Array]$segmentData = @()
-                    foreach ($entry in $data) {
-                        if ($entry.$prop.GetType().Name -ne "Object[]") {
-                            continue
+                if ($SubSampleRate -gt 0) {
+                    $NumSegments = $NumSamples / $SubSampleRate
+                    while ($i -lt $NumSegments) {
+                        [Array]$segmentData = @()
+                        foreach ($entry in $data) {
+                            if ($entry.$prop.GetType().Name -ne "Object[]") {
+                                continue
+                            }
+                            if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey))) {
+                                $segmentData += $entry[$Prop][($i * $SubSampleRate) .. ((($i + 1) * $SubSampleRate) - 1)]
+                            }
                         }
-                        if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey))) {
-                            $segmentData += $entry[$Prop][($i * $SubSampleRate) .. ((($i + 1) * $SubSampleRate) - 1)]
+                        $segmentData = $segmentData | Sort
+                        $time        = $i * $subSampleRate
+                        if ($segmentData.Count -ge 5) {
+                            $table.rows."Data Point".$row       = $row
+                            $table.rows."Data Point".($row + 1) = $row + 1
+                            $table.rows."Data Point".($row + 2) = $row + 2
+                            $table.rows."Data Point".($row + 3) = $row + 3
+                            $table.rows."Data Point".($row + 4) = $row + 4
+                            $table.data.$tableTitle."Time Segment"."Data Point".$row       = @{"value" = $time}
+                            $table.data.$tableTitle."Time Segment"."Data Point".($row + 1) = @{"value" = $time}
+                            $table.data.$tableTitle."Time Segment"."Data Point".($row + 2) = @{"value" = $time}
+                            $table.data.$tableTitle."Time Segment"."Data Point".($row + 3) = @{"value" = $time}
+                            $table.data.$tableTitle."Time Segment"."Data Point".($row + 4) = @{"value" = $time}
+                            $table.data.$tableTitle.$Prop."Data Point".$row = @{"value"       = $segmentData[0]}
+                            $table.data.$tableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[[int]($segmentData.Count / 4)]}
+                            $table.data.$tableTitle.$Prop."Data Point".($row + 2) = @{"value" = $segmentData[[int]($segmentData.Count / 2)]}
+                            $table.data.$tableTitle.$Prop."Data Point".($row + 3) = @{"value" = $segmentData[[int]((3 * $segmentData.Count) / 4)]}
+                            $table.data.$tableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
+                            $row += 5
+                        } 
+                        else {
+                            foreach ($sample in $segmentData) {
+                                $table.rows."Data Point".$row = $row
+                                $table.data.$tableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
+                                $table.data.$tableTitle.$Prop."Data Point".$row          = @{"value" = $sample}
+                                $row++
+                            }
                         }
+                        $i++
                     }
-                    $segmentData = $segmentData | Sort
-                    $time        = $i * $subSampleRate
-                    if ($segmentData.Count -ge 5) {
-                        $table.rows."Data Point".$row       = $row
-                        $table.rows."Data Point".($row + 1) = $row + 1
-                        $table.rows."Data Point".($row + 2) = $row + 2
-                        $table.rows."Data Point".($row + 3) = $row + 3
-                        $table.rows."Data Point".($row + 4) = $row + 4
-                        $table.data.$tableTitle."Time Segment"."Data Point".$row       = @{"value" = $time}
-                        $table.data.$tableTitle."Time Segment"."Data Point".($row + 1) = @{"value" = $time}
-                        $table.data.$tableTitle."Time Segment"."Data Point".($row + 2) = @{"value" = $time}
-                        $table.data.$tableTitle."Time Segment"."Data Point".($row + 3) = @{"value" = $time}
-                        $table.data.$tableTitle."Time Segment"."Data Point".($row + 4) = @{"value" = $time}
-                        $table.data.$tableTitle.$Prop."Data Point".$row = @{"value"       = $segmentData[0]}
-                        $table.data.$tableTitle.$Prop."Data Point".($row + 1) = @{"value" = $segmentData[[int]($segmentData.Count / 4)]}
-                        $table.data.$tableTitle.$Prop."Data Point".($row + 2) = @{"value" = $segmentData[[int]($segmentData.Count / 2)]}
-                        $table.data.$tableTitle.$Prop."Data Point".($row + 3) = @{"value" = $segmentData[[int]((3 * $segmentData.Count) / 4)]}
-                        $table.data.$tableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
-                        $row += 5
-                    } 
-                    else {
+                } else {
+                    while ($i -lt $NumSamples) {
+                        [Array]$segmentData = @()
+                        foreach ($entry in $data) {
+                            if ($entry.$prop.GetType().Name -ne "Object[]") {
+                                continue
+                            }
+                            if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey))) {
+                                $segmentData += $entry[$Prop][$i]
+                            }
+                        }
+
                         foreach ($sample in $segmentData) {
                             $table.rows."Data Point".$row = $row
-                            $table.data.$tableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
+                            $table.data.$tableTitle."Time Segment"."Data Point".$row = @{"value" = $i}
                             $table.data.$tableTitle.$Prop."Data Point".$row          = @{"value" = $sample}
                             $row++
                         }
+                        $i++
                     }
-                    $i++
                 }
                 $table.meta.dataWidth     = Get-TreeWidth $table.cols
                 $table.meta.colLabelDepth = Get-TreeDepth $table.cols
