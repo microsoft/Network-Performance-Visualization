@@ -39,7 +39,7 @@ For more info, visit the tool's [Design Document](https://www.office.com/launch/
 
 # Installation
 ## Manual Installation
-Download this repo to your machine, and then move the Network-Performance-Visualization folder to C:\Program Files\WindowsPowerShell\Modules. After moving the folder, PowerShell will automatically load the module when the commands are invoked. You can double check that everything was installed correctly by running the command
+Download this repo to your machine, and then move the Network-Performance-Visualization folder to C:\Program Files\WindowsPowerShell\Modules. Alternatively copy the folder to "%userprofile%\Documents\WindowsPowershell\Modules". After moving the folder, PowerShell will automatically load the module when the commands are invoked. You can double check that everything was installed correctly by running the command
 ```PowerShell
 Get-Module -ListAvailable
 ```
