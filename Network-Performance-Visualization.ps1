@@ -59,7 +59,7 @@ function New-NetworkVisualization {
     The outer pivot varies in value across different worksheets and remains constant within each worksheet. 
 
     .PARAMETER SavePath
-    Path to where the generated Excel report should be saved. 
+    Full path to excel output file (with extension) where the report should be generated. ex: C:\TempDirName\Filename.xlsx
 
     .PARAMETER SubsampleRate
     Only relevant when run running tool in LATTE context. Sets the subsampling rate used to create the raw
@@ -94,6 +94,7 @@ function New-NetworkVisualization {
         [string]$OuterPivot="",
 
         [Parameter(Mandatory=$true)]
+        [ValidatePattern('[.]*\.xl[txms]+')]
         [string]$SavePath,
 
         [Parameter(ParameterSetName = "LATTE")]
