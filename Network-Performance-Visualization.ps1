@@ -223,7 +223,7 @@ function Validate-Pivots ($Tool, $InnerPivot, $OuterPivot) {
                 $msg += "Supported pivots are:`n"
 
                 foreach ($pivot in $NTTTCPPivots) {
-                    if ($pivot -eq $null) {
+                    if ($null -eq $pivot) {
                         continue
                     }
                     $msg += "$pivot`n"
@@ -240,7 +240,7 @@ function Validate-Pivots ($Tool, $InnerPivot, $OuterPivot) {
                 $msg += "Supported pivots are:`n"
 
                 foreach ($pivot in $LATTEPivots) {
-                    if ($pivot -eq $null) {
+                    if ($null -eq $pivot) {
                         continue
                     }
                     $msg += "$pivot`n"
@@ -257,7 +257,7 @@ function Validate-Pivots ($Tool, $InnerPivot, $OuterPivot) {
                 $msg += "Supported pivots are:`n"
 
                 foreach ($pivot in $CTSPivots) {
-                    if ($pivot -eq $null) {
+                    if ($null -eq $pivot) {
                         continue
                     }
                     $msg += "$pivot`n"
