@@ -296,17 +296,22 @@ function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
     if ($CellSettings.fontColor) {
         $Worksheet.Cells($Row, $Col).Font.Color = $CellSettings.fontColor
     }
+
     if ($CellSettings.cellColor) {
         $Worksheet.Cells($Row, $Col).Interior.Color = $CellSettings.cellColor
     }
+
     if ($CellSettings.bold) {
         $Worksheet.Cells($Row, $Col).Font.Bold = $true
     }
+
     if ($CellSettings.center) {
         $Worksheet.Cells($Row, $Col).HorizontalAlignment = $XLENUM.xlHAlignCenter
         $Worksheet.Cells($Row, $Col).VerticalAlignment = $XLENUM.xlHAlignCenter
     }
-    if ($CellSettings.value -ne $null) {
+    
+    if ($null -ne $CellSettings.value) {
+
         $Worksheet.Cells($Row, $Col) = $CellSettings.value
     }
 }
