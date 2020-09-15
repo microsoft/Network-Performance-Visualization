@@ -365,6 +365,7 @@ function Format-Stats {
                     }
                 }
             }
+
             $col = 0
             $row = 0
             $noStats = $false
@@ -788,6 +789,11 @@ function Format-MinMaxChart {
                     }
                 }
             }
+
+            if (-not $innerPivot) {
+                $table.chartSettings.yOffset = 3
+            }
+
             $col = 0
             $row = 0
             foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
