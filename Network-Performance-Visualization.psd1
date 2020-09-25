@@ -30,7 +30,7 @@ CompanyName = 'Microsoft'
 Copyright = '(c) 2020 Inc. All rights reserved.'
 
 # Description of the functionality provided by this module
-# Description = ''
+Description = 'Network-Data-Visualization is a tool used to visualize the data produced by various network performance analysis tools.'
 
 # Minimum version of the PowerShell engine required by this module
 # PowerShellVersion = ''
