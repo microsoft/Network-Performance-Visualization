@@ -1,3 +1,8 @@
+. "$PSScriptRoot.\Data-Parser.ps1"
+. "$PSScriptRoot.\Data-Processor.ps1"
+. "$PSScriptRoot.\Data-Formatters.ps1"
+. "$PSScriptRoot.\Excel-Plotter.ps1"
+
 $XLENUM = New-Object -TypeName PSObject
 
 $NTTTCPPivots = @("", "sessions", "bufferLen", "bufferCount")
