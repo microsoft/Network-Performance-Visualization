@@ -39,16 +39,24 @@ For more info, visit the tool's [Design Document](https://www.office.com/launch/
 
 # Installation
 ## Manual Installation
-Download this repo to your machine, and then move the Network-Performance-Visualization folder to C:\Program Files\WindowsPowerShell\Modules. Alternatively copy the folder to "%userprofile%\Documents\WindowsPowershell\Modules". After moving the folder, PowerShell will automatically load the module when the commands are invoked. You can double check that everything was installed correctly by running the command
+Download this repo to your machine, and then copy the Network-Performance-Visualization folder to one of the follwing locations:
+- Windows PowerShell (5.1)
+  - `C:\Program Files\WindowsPowerShell\Modules`
+  - `%userprofile%\Documents\WindowsPowershell\Modules`
+- PowerShell Core (6.0+)
+  - `C:\Program Files\PowerShell\Modules`
+  - `%userprofile%\Documents\Powershell\Modules`
+
+After copying the folder, PowerShell will automatically load the module when the commands are invoked. You can double check that it is installed correctly by running the command.
 ```PowerShell
 Get-Module -ListAvailable
 ```
 and checking that `Network-Performance-Visualization` is listed among the available modules.
+
 # Usage
-The `Network-Performance-Visualization` module exports one command called `New-NetworkVisualization`.  
+This module exports one command called `New-NetworkVisualization`.  
 For help and options when running this command directly, use:
 ```PowerShell
-Update-Help
 Get-Help New-NetworkVisualization
 ```
 # Contributing
