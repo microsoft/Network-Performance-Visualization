@@ -26,62 +26,56 @@ function Create-ExcelFile {
         [string]$SavePath
     )
 
-    try {
-        $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
+    $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
+    
+    # Can be set to true for debugging purposes
+    $excelObject.Visible = $false
+
+    $workbookObject = $excelObject.Workbooks.Add()
+    $worksheetObject = $workbookObject.Worksheets.Item(1)
         
-        # Can be set to true for debugging purposes
-        $excelObject.Visible = $false
-
-        $workbookObject = $excelObject.Workbooks.Add()
-        $worksheetObject = $workbookObject.Worksheets.Item(1)
-            
-        $rowOffset = 1
-        $chartNum  = 1
-        $first = $true
-        foreach ($table in $Tables) {
-            if ($table.GetType().Name -eq "string") {
-                if ($first) {
-                    $first = $false
-                } 
-                else {
-                    Fit-Cells -Worksheet $worksheetObject 
-                    $worksheetObject = $workbookObject.worksheets.Add()
-                }
-                $worksheetObject.Name = $table
-                $chartNum = 1
-                $rowOffset = 1
-                continue
+    $rowOffset = 1
+    $chartNum  = 1
+    $first = $true
+    foreach ($table in $Tables) {
+        if ($table.GetType().Name -eq "string") {
+            if ($first) {
+                $first = $false
+            } 
+            else {
+                Fit-Cells -Worksheet $worksheetObject 
+                $worksheetObject = $workbookObject.worksheets.Add()
             }
-
-            Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) -row $rowOffset | Out-Null
-            Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) -col 1 | Out-Null
-            Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset) | Out-Null
-            if ($table.chartSettings) {
-                Create-Chart -Worksheet $worksheetObject -Table $table -StartCol 1 -StartRow $rowOffset -chartNum $chartNum | Out-Null
-                $chartNum += 1
-            }
-             Format-ExcelSheet -Worksheet $worksheetObject -Table $table -RowOffset $rowOffset
-            $rowOffset += $table.meta.colLabelDepth + $table.meta.dataHeight + 1
+            $worksheetObject.Name = $table
+            $chartNum = 1
+            $rowOffset = 1
+            continue
         }
-        
-        Fit-Cells -Worksheet $worksheetObject
 
-        $workbookObject.SaveAs($savePath, $XLENUM.xlOpenXMLWorkbook) | Out-Null  
-        $workbookObject.Saved = $true 
-        $workbookObject.Close() | Out-Null
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject) | Out-Null  
+        Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) -row $rowOffset | Out-Null
+        Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) -col 1 | Out-Null
+        Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset) | Out-Null
+        if ($table.chartSettings) {
+            Create-Chart -Worksheet $worksheetObject -Table $table -StartCol 1 -StartRow $rowOffset -chartNum $chartNum | Out-Null
+            $chartNum += 1
+        }
+            Format-ExcelSheet -Worksheet $worksheetObject -Table $table -RowOffset $rowOffset
+        $rowOffset += $table.meta.colLabelDepth + $table.meta.dataHeight + 1
+    }
+    
+    Fit-Cells -Worksheet $worksheetObject
 
-        $excelObject.Quit() | Out-Null
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObject) | Out-Null
-        [System.GC]::Collect() | Out-Null
-        [System.GC]::WaitForPendingFinalizers() | Out-Null
+    $workbookObject.SaveAs($savePath, $XLENUM.xlOpenXMLWorkbook) | Out-Null  
+    $workbookObject.Saved = $true 
+    $workbookObject.Close() | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject) | Out-Null  
 
-        return [string]$savePath
-    } 
-    catch {
-        Write-Warning "Error at Create-ExcelFile"
-        Write-Error $_.Exception.Message
-    } 
+    $excelObject.Quit() | Out-Null
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObject) | Out-Null
+    [System.GC]::Collect() | Out-Null
+    [System.GC]::WaitForPendingFinalizers() | Out-Null
+
+    return [string]$savePath
 }
 
 
