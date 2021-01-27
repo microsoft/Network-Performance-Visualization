@@ -5,14 +5,41 @@
 
 $XLENUM = New-Object -TypeName PSObject
 
-$NTTTCPPivots = @("", "sessions", "bufferLen", "bufferCount")
-$LATTEPivots = @("", "protocol", "sendMethod")
-$CTSPivots = @("", "sessions")
+$NTTTCPPivots = @("sessions", "bufferLen", "bufferCount", "none")
+$LATTEPivots = @("protocol", "sendMethod", "none")
+$CTSPivots = @("sessions", "none")
 
+#
+# Define atrribute that dynamically tab completes pivot params.
+# This is not a form of validation like [ValidateScript()]
+#
+[ScriptBlock] $Global:PACScript = { 
+    param($CommandName, $ParameterName, $WordToComplete, $CommandAst, $FakeBoundParameters)
 
-function New-NetworkVisualization {
-    <#
-    .Description
+    if ($FakeBoundParameters.ContainsKey("NTTTCP")) {
+        return $NTTTCPPivots | where {$_ -like "$WordToComplete*"}
+    }
+    elseif ($FakeBoundParameters.ContainsKey("LATTE")) {
+        return $LATTEPivots | where {$_ -like "$WordToComplete*"}
+    }
+    elseif ($FakeBoundParameters.ContainsKey("CTStraffic")) {
+        return $CTSPivots | where {$_ -like "$WordToComplete*"}
+    }
+    else {
+        return @("")
+    }
+}
+
+class PivotArgumentCompleter : ArgumentCompleter {
+    PivotArgumentCompleter() : base($Global:PACScript) {
+    }
+}
+
+<#
+.SYNOPSIS
+    Visualizes network performance data via excel tables and charts
+
+.Description
     This cmdlet parses raw data files produced from various network performance monitoring tools, processes them, and produces 
     visualizations of the data. This tool is capable of visualizing data from the following tools:
 
@@ -23,92 +50,94 @@ function New-NetworkVisualization {
     This tool can aggregate data over several iterations of test runs, and can be used to visualize comparisons
     between a baseline and test set of data.
 
-    .PARAMETER NTTTCP
+.PARAMETER NTTTCP
     Flag that sets New-Visualization command to run in NTTTCP mode
 
-    .PARAMETER LATTE
+.PARAMETER LATTE
     Flag that sets New-Visualization command to run in LATTE mode
-    
-    .PARAMETER CTStraffic
+
+.PARAMETER CTStraffic
     Flag that sets New-Visualization command to run in CTStraffic mode
 
-    .PARAMETER BaselineDir
+.PARAMETER BaselineDir
     Path to directory containing network performance data files to be consumed as baseline data.
 
-    .PARAMETER TestDir
+.PARAMETER TestDir
     Path to directory containing network performance data files to be consumed as test data. Providing
     this parameter runs the tool in comparison mode.
 
-    .PARAMETER InnerPivot
+.PARAMETER InnerPivot
     Name of the property to use as a pivot variable. Valid values for this parameter are:
-        NTTTCP:     sessions, bufferCount, bufferLen
-        LATTE:      protocol
-        CTSTraffic: sessions
+        NTTTCP:     sessions, bufferLen, bufferCount, none
+        LATTE:      protocol, sendMethod, none
+        CTSTraffic: sessions, none
+    
+    The default for all cases is none.
 
     The inner pivot varies in value within each worksheet; the different pivot values are used as table column labels.
 
-
-    .PARAMETER OuterPivot
-    Name of the property to use as a pivot variable. Valid values for this parameter are:
-        NTTTCP:     sessions, bufferCount, bufferLen
-        LATTE:      protocol
-        CTSTraffic: sessions
-
+.PARAMETER OuterPivot
+    Name of the property to use as a pivot variable. This parameter has the same valid values as InnerPivot.
     The outer pivot varies in value across different worksheets and remains constant within each worksheet. 
 
-    .PARAMETER SavePath
+.PARAMETER SavePath
     Full path to excel output file (with extension) where the report should be generated. ex: C:\TempDirName\Filename.xlsx
 
-    .PARAMETER SubsampleRate
+.PARAMETER SubsampleRate
     Only relevant when run running tool in LATTE context. Sets the subsampling rate used to create the raw
     data chart displaying the latency distribution over time. 
 
-    .SYNOPSIS
-    Visualizes network performance data via excel tables and charts
-    #>  
+.LINK
+    https://github.com/microsoft/Network-Performance-Visualization
+#>
+function New-NetworkVisualization {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true, ParameterSetName="NTTTCP")]
-        [switch]$NTTTCP,
+        [Switch] $NTTTCP,
 
         [Parameter(Mandatory=$true, ParameterSetName="LATTE")]
-        [switch]$LATTE,
+        [Switch] $LATTE,
 
         [Parameter(Mandatory=$true, ParameterSetName="CTStraffic")]
-        [switch]$CTStraffic,
+        [Switch] $CTStraffic,
 
-        [Parameter(Mandatory=$true, ParameterSetName = "NTTTCP")]
-        [Parameter(Mandatory=$true, ParameterSetName = "LATTE")]
-        [Parameter(Mandatory=$true, ParameterSetName = "CTStraffic")]
-        [string]$BaselineDir, 
+        [Parameter(Mandatory=$true)]
+        [String] $BaselineDir, 
 
-        [Parameter()]
-        [string]$TestDir=$null,
+        [Parameter(Mandatory=$false)]
+        [String] $TestDir = $null,
 
-        [Parameter()]
-        [string]$InnerPivot="",
+        [Parameter(Mandatory=$false)]
+        [PivotArgumentCompleter()]
+        [String] $InnerPivot = "none",
 
-        [Parameter()]
-        [string]$OuterPivot="",
+        [Parameter(Mandatory=$false)]
+        [PivotArgumentCompleter()]
+        [String] $OuterPivot = "none",
 
         [Parameter(Mandatory=$true)]
         [ValidatePattern('[.]*\.xl[txms]+')]
-        [string]$SavePath,
+        [String] $SavePath,
 
-        [Parameter(ParameterSetName = "LATTE")]
-        [int]$SubsampleRate = 50
+        [Parameter(Mandatory=$false, ParameterSetName = "LATTE")]
+        [Int] $SubsampleRate = 50
     )
-    
-    Initialize-XLENUM
 
     $ErrorActionPreference = "Stop"
-
+    
     # Save tool name
     $tool = Get-ToolName -NTTTCP $NTTTCP -LATTE $LATTE -CTStraffic $CTStraffic
     if (-Not (Validate-Pivots -tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot)) {
         return
     }
-    
+
+    # Temporarily replace "none" with empty string to ensure compat.
+    $InnerPivot = if ($InnerPivot -eq "none") {""} else {$InnerPivot}
+    $OuterPivot = if ($OuterPivot -eq "none") {""} else {$OuterPivot}
+
+    Initialize-XLENUM
+
     # Parse Data 
     $baselineRaw = Parse-Files -Tool $tool -DirName $BaselineDir
     $testRaw     = $null
@@ -231,7 +260,8 @@ function Validate-Pivots ($Tool, $InnerPivot, $OuterPivot) {
                 return $false
             }    
         }
-    } 
+    }
+
     if ($Tool -eq "LATTE") {
         foreach ($curPivot in @($InnerPivot, $OuterPivot)) {
             if (-Not ($LATTEPivots -contains $curPivot)) {
@@ -249,6 +279,7 @@ function Validate-Pivots ($Tool, $InnerPivot, $OuterPivot) {
             }    
         } 
     }
+
     if ($Tool -eq "CTStraffic") {
         foreach ($curPivot in @($InnerPivot, $OuterPivot)) {
             if (-Not ($CTSPivots -contains $curPivot)) {
@@ -266,7 +297,7 @@ function Validate-Pivots ($Tool, $InnerPivot, $OuterPivot) {
             }    
         }
     }
-    if (($InnerPivot -eq $OuterPivot) -and ($InnerPivot -ne "")) {
+    if (($InnerPivot -eq $OuterPivot) -and ($InnerPivot -ne "none")) {
         Write-Warning "Cannot use the same property for both inner and outer pivots."
         return $false
     }
