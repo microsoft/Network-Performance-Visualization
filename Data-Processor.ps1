@@ -28,65 +28,60 @@ function Process-Data {
         [Parameter()] [String] $InnerPivot,
         [Parameter()] [String] $OuterPivot
     )
-    try {
-        $processedDataObj = @{
-            "meta"    = $BaselineRawData.meta
-            "data"    = @{}
-            "rawData" = @{
-                "baseline" = $BaselineRawData.data
-            }
+
+    $processedDataObj = @{
+        "meta"    = $BaselineRawData.meta
+        "data"    = @{}
+        "rawData" = @{
+            "baseline" = $BaselineRawData.data
+        }
+    }
+
+    $processedDataObj.meta.InnerPivot = $InnerPivot
+    $processedDataObj.meta.OuterPivot = $OuterPivot
+
+    if ($TestRawData) {
+        $processedDataObj.meta.comparison = $true
+        $processedDataObj.rawData.test    = $TestRawData.data
+    }
+
+    $meta = $processedDataObj.meta 
+
+    $modes = @("baseline")
+    foreach ($prop in ([Array]$BaselineRawData.data)[0].Keys) {
+        if ($BaselineRawData.meta.noTable -contains $prop) {
+            continue
         }
 
-        $processedDataObj.meta.InnerPivot = $InnerPivot
-        $processedDataObj.meta.OuterPivot = $OuterPivot
+        # Extract property values from dataEntry objects and place values in the correct spot within the processedData object
+        foreach($item in $BaselineRawData.data) {
+            Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "baseline"
+        }
 
         if ($TestRawData) {
-            $processedDataObj.meta.comparison = $true
-            $processedDataObj.rawData.test    = $TestRawData.data
+            $modes += "test"
+            foreach ($item in $TestRawData.data) {
+                Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "test"
+            }
         }
 
-        $meta = $processedDataObj.meta 
-
-        $modes = @("baseline")
-        foreach ($prop in ([Array]$BaselineRawData.data)[0].Keys) {
-            if ($BaselineRawData.meta.noTable -contains $prop) {
-                continue
-            }
-
-            # Extract property values from dataEntry objects and place values in the correct spot within the processedData object
-            foreach($item in $BaselineRawData.data) {
-                Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "baseline"
-            }
-
-            if ($TestRawData) {
-                $modes += "test"
-                foreach ($item in $TestRawData.data) {
-                    Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "test"
+        foreach ($oPivotKey in $processedDataObj.data.Keys) {
+            foreach ($iPivotKey in $processedDataObj.data.$oPivotKey.$prop.Keys) {
+                foreach ($mode in $modes) {
+                    if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.orderedData) {
+                        Calculate-Metrics -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
+                    }
+                    if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
+                        Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
+                    }
                 }
-            }
-
-            foreach ($oPivotKey in $processedDataObj.data.Keys) {
-                foreach ($iPivotKey in $processedDataObj.data.$oPivotKey.$prop.Keys) {
-                    foreach ($mode in $modes) {
-                        if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.orderedData) {
-                            Calculate-Metrics -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
-                        }
-                        if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
-                            Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
-                        }
-                    }
-                    if ($TestRawData) {
-                        Calculate-PercentChange -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey
-                    }
+                if ($TestRawData) {
+                    Calculate-PercentChange -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey
                 }
             }
         }
-        return $processedDataObj
-    } 
-    catch {
-        Write-Warning "Error in Process-Data"
-        Write-Error $_.Exception.Message
     }
+    return $processedDataObj
 }
 
 
@@ -206,47 +201,42 @@ function Calculate-Metrics ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) 
 #
 ##
 function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
+    $dataModel = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode
     # Calculate cumulative density function
     $cdf = @{}
     $sumSoFar = 0
-    foreach ($bucket in ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.Keys | Sort)) {
-        $sumSoFar    += $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.$bucket
-        $cdf.$bucket  = $sumSoFar 
+    foreach ($bucket in ($dataModel.histogram.Keys | Sort)) {
+        $sumSoFar += $dataModel.histogram.$bucket
+        $cdf.$bucket = $sumSoFar 
     }
 
-    $buckets = ([Array] $cdf.Keys | Sort )
-
+    # Convert to pecentages
+    $buckets = [System.Collections.Queue]@($cdf.Keys | Sort)
     foreach ($bucket in $buckets) {
         $cdf.$bucket = 100 * ($cdf.$bucket / $sumSoFar)
     }
-
-    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentilesHist = @{}
     
-    $j = 0
-    $i = 0
+    $dataModel.percentilesHist = @{}
 
-    while ($j -lt $Percentiles.Count) {
-        while (($cdf.($buckets[$i]) -le $Percentiles[$j]) -and ($i -lt ($buckets.Count - 1))) {
-            $i++
+    $prevBucket = $null
+    $bucket = $buckets.Dequeue()
+    foreach ($percentile in $Percentiles) {
+        # Skip buckets irrevalent to current percentile calculation
+        while ($cdf.$bucket -lt $percentile) {
+            $prevBucket = $bucket
+            $bucket = $buckets.Dequeue()
         }
 
-        if ($i -eq 0) {
-            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentilesHist.($Percentiles[$j]) = $buckets[$i]
-        } 
-        else {
-            $lowerVal    = $cdf.($buckets[$i - 1])
-            $lowerBucket = $buckets[$i - 1]
-            $upperVal    = $cdf.($buckets[$i])
-            $upperBucket = $buckets[$i] 
-            
-            $dist = ($Percentiles[$j] - $lowerVal) / ($upperVal - $lowerVal)
-            
-            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentilesHist.($Percentiles[$j]) = ($dist * $upperBucket) + ((1 - $dist) * $lowerBucket)
-        }
+        if ($null -eq $prevBucket) {
+            $dataModel.percentilesHist.$percentile = $bucket
+        } else {
+            # Approx. the desired percentile via linear interpolation
+            $interp = ($percentile - $cdf.$prevBucket) / ($cdf.$bucket - $cdf.$prevBucket)
+            $approxPercentile = ($interp * $bucket) + ((1 - $interp) * $prevBucket)
 
-        $j++ 
+            $dataModel.percentilesHist.$percentile = $approxPercentile
+        }
     }
-
 }
 
 

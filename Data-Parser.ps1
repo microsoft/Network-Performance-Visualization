@@ -24,29 +24,16 @@ function Parse-Files {
         [Parameter()] [string] $Tool
     )
 
-    try {
-        $files = Get-ChildItem $DirName
-    } 
-    catch {
-        Write-Warning "Error at Parse-Files: failed to open directory at path: $DirName"
-        Write-Error $_.Exception.Message
-    }
+    $files = Get-ChildItem $DirName
 
     if ($Tool -eq "NTTTCP") {
         [Array] $dataEntries = @()
         foreach ($file in $files) {
             $fileName = $file.FullName
-            try {
-                $dataEntry = Parse-NTTTCP -FileName $fileName
-            } 
-            catch {
-                Write-Warning "Error at Parse-NTTTCP: failed to parse file $fileName"
-                Write-Error $_.Exception.Message
-            }
+            $dataEntry = Parse-NTTTCP -FileName $fileName
             if ($dataEntry) {
                 $dataEntries += ,$dataEntry
             }
-           
         }
 
         $rawData = @{
@@ -75,13 +62,7 @@ function Parse-Files {
         [Array] $dataEntries = @() 
         foreach ($file in $files) {
             $fileName = $file.FullName
-            try {
-                $dataEntry = Parse-LATTE -FileName $fileName
-            } 
-            catch {
-                Write-Warning "Error at Parse-LATTE: failed to parse file $fileName"
-                Write-Error $_.Exception.Message
-            }
+            $dataEntry = Parse-LATTE -FileName $fileName
 
             $dataEntries += ,$dataEntry
         }
@@ -109,15 +90,9 @@ function Parse-Files {
         [Array] $dataEntries = @() 
         foreach ($file in $files) {
             $fileName = $file.FullName
-            try {
-                $ErrorActionPreference = "Stop"
+            $ErrorActionPreference = "Stop"
+            $dataEntry = Parse-CTStraffic -FileName $fileName
 
-                $dataEntry = Parse-CTStraffic -FileName $fileName
-            } 
-            catch {
-                Write-Warning "Error at Parse-CTStraffic: failed to parse file $fileName"
-                Write-Error $_.Exception.Message
-            }
             if ($dataEntry) {
                 $dataEntries += ,$dataEntry
             }
