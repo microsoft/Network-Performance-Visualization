@@ -38,20 +38,15 @@ Using pivot variables allows for the comparison of data while holding constant c
 For more info, visit the tool's [Design Document](https://www.office.com/launch/word/content?auth=2&drive=b!XVugkRto9k-yWLd-1lV3x91xpWb7YetMkwkg78JGrGIq2EXXA729QpXyvQ_xDbv_&item=01EFWYSENNQ7FN6R6Z25DKTB3CARUIDOKR&file=https:%2F%2Fmicrosoft-my.sharepoint.com%2Fpersonal%2Ft-lucgon_microsoft_com%2FDocuments%2FDocument.docx%3Fweb%3D1)
 
 # Installation
-## Manual Installation
-Download this repo to your machine, and then copy the Network-Performance-Visualization folder to one of the follwing locations:
-- Windows PowerShell (5.1)
-  - `C:\Program Files\WindowsPowerShell\Modules`
-  - `%userprofile%\Documents\WindowsPowershell\Modules`
-- PowerShell Core (6.0+)
-  - `C:\Program Files\PowerShell\Modules`
-  - `%userprofile%\Documents\Powershell\Modules`
-
-After copying the folder, PowerShell will automatically load the module when the commands are invoked. You can double check that it is installed correctly by running the command.
+## PSGallery
+This module is available on PSGallery, and can be installed using this command:
 ```PowerShell
-Get-Module -ListAvailable
+Install-Module "Network-Performance-Visualization"
 ```
-and checking that `Network-Performance-Visualization` is listed among the available modules.
+## Manual
+This module can be manually installed by downloading the repo and copying the `Network-Performance-Visualization` folder to:
+- `%USERPROFILE%\Documents\WindowsPowershell\Modules` for PowerShell 5.1
+- `%USERPROFILE%\Documents\Powershell\Modules` for PowerShell Core
 
 # Usage
 This module exports one command called `New-NetworkVisualization`.  
