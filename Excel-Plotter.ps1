@@ -65,7 +65,7 @@ function Create-ExcelFile {
     
     Fit-Cells -Worksheet $worksheetObject
 
-    $workbookObject.SaveAs($savePath, $XLENUM.xlOpenXMLWorkbook) | Out-Null  
+    $workbookObject.SaveAs($savePath, [Microsoft.Office.Interop.Excel.XlFileFormat]::xlOpenXMLWorkbook) | Out-Null  
     $workbookObject.Saved = $true 
     $workbookObject.Close() | Out-Null
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject) | Out-Null  
@@ -123,7 +123,7 @@ function Format-ExcelSheet ($Worksheet, $Table, $RowOffset) {
     if ($Table.meta.columnFormats) {
         for ($i = 0; $i -lt $Table.meta.columnFormats.Count; $i++) {
             if ($Table.meta.columnFormats[$i]) {
-                $column = $worksheetObject.Range($Worksheet.Cells($RowOffset + $Table.meta.colLabelDepth, 1 + $Table.meta.rowLabelDepth + $i), $Worksheet.Cells($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, 1 + $Table.meta.rowLabelDepth + $i))
+                $column = $worksheetObject.Range($Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth, 1 + $Table.meta.rowLabelDepth + $i), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, 1 + $Table.meta.rowLabelDepth + $i))
                 $column.select() | Out-Null
                 $column.NumberFormat = $Table.meta.columnFormats[$i]
             }
@@ -131,21 +131,21 @@ function Format-ExcelSheet ($Worksheet, $Table, $RowOffset) {
     }
     if ($Table.meta.leftAlign) {
         foreach ($col in $Table.meta.leftAlign) {
-            $selection = $Worksheet.Range($Worksheet.Cells($RowOffset, $col), $Worksheet.Cells($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $col))
+            $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, $col), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $col))
             $selection.select() | Out-Null
-            $selection.HorizontalAlignment = $XLENUM.xlHAlignLeft
+            $selection.HorizontalAlignment = [Microsoft.Office.Interop.Excel.XlHAlign]::xlHAlignLeft
         }
     }
     if ($Table.meta.rightAlign) {
         foreach ($col in $Table.meta.rightAlign) {
-            $selection = $Worksheet.Range($Worksheet.Cells($RowOffset, $col), $Worksheet.Cells($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $col))
+            $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, $col), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $col))
             $selection.select() | Out-Null
-            $selection.HorizontalAlignment = $XLENUM.xlHAlignRight
+            $selection.HorizontalAlignment = [Microsoft.Office.Interop.Excel.XlHAlign]::xlHAlignLeft
         }
     }
-    $selection = $Worksheet.Range($Worksheet.Cells($RowOffset, 1), $Worksheet.Cells($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $Table.meta.rowLabelDepth + $Table.meta.dataWidth))
+    $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, 1), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $Table.meta.rowLabelDepth + $Table.meta.dataWidth))
     $selection.select() | Out-Null
-    $selection.BorderAround($XLENUM.xlContinuous, $XLENUM.xlThick) | Out-Null
+    $selection.BorderAround([Microsoft.Office.Interop.Excel.XlLineStyle]::xlContinuous, [Microsoft.Office.Interop.Excel.XlBorderWeight]::xlThick) | Out-Null
 }
 
 
@@ -184,9 +184,12 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
     if ($Table.chartSettings.chartType) {
         $chart.ChartType = $Table.chartSettings.chartType
     }
-    $chart.SetSourceData($Worksheet.Range($Worksheet.Cells($StartRow, $StartCol), $Worksheet.Cells($StartRow + $height - 1, $StartCol + $width - 1)))
+    $chart.SetSourceData($Worksheet.Range($Worksheet.Cells.Item($StartRow, $StartCol), $Worksheet.Cells.Item($StartRow + $height - 1, $StartCol + $width - 1)))
     
     if ($Table.chartSettings.plotBy) {
+        $global:chart = $chart
+        $global:table = $table
+        
         $chart.PlotBy = $Table.chartSettings.plotBy
     }
      
@@ -239,7 +242,7 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MaximumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.max
             }
             if ($Table.chartSettings.axisSettings.$axisNum.logarithmic) {
-                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).scaleType = $XLENUM.xlScaleLogarithmic
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).scaleType = [Microsoft.Office.Interop.Excel.XlScaleType]::xlScaleLogarithmic
             }
             if ($Table.chartSettings.axisSettings.$axisNum.title) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).HasTitle = $true
@@ -263,8 +266,8 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
         $chart.HasLegend = $false
     }
 
-    $Worksheet.Shapes.Item("Chart " + $ChartNum ).top = $Worksheet.Cells($StartRow, $StartCol + $width + 1).top
-    $Worksheet.Shapes.Item("Chart " + $ChartNum ).left = $Worksheet.Cells($StartRow, $StartCol + $width + 1).left
+    $Worksheet.Shapes.Item("Chart " + $ChartNum ).top = $Worksheet.Cells.Item($StartRow, $StartCol + $width + 1).top
+    $Worksheet.Shapes.Item("Chart " + $ChartNum ).left = $Worksheet.Cells.Item($StartRow, $StartCol + $width + 1).left
 }
 
 
@@ -286,27 +289,26 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
 #
 ##
 function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
-    $Worksheet.Cells($Row, $Col).Borders.LineStyle = $XLENUM.xlContinuous
+    $Worksheet.Cells.Item($Row, $Col).Borders.LineStyle = [Microsoft.Office.Interop.Excel.XlLineStyle]::xlContinuous
     if ($CellSettings.fontColor) {
-        $Worksheet.Cells($Row, $Col).Font.Color = $CellSettings.fontColor
+        $Worksheet.Cells.Item($Row, $Col).Font.Color = $CellSettings.fontColor
     }
 
     if ($CellSettings.cellColor) {
-        $Worksheet.Cells($Row, $Col).Interior.Color = $CellSettings.cellColor
+        $Worksheet.Cells.Item($Row, $Col).Interior.Color = $CellSettings.cellColor
     }
 
     if ($CellSettings.bold) {
-        $Worksheet.Cells($Row, $Col).Font.Bold = $true
+        $Worksheet.Cells.Item($Row, $Col).Font.Bold = $true
     }
 
     if ($CellSettings.center) {
-        $Worksheet.Cells($Row, $Col).HorizontalAlignment = $XLENUM.xlHAlignCenter
-        $Worksheet.Cells($Row, $Col).VerticalAlignment = $XLENUM.xlHAlignCenter
+        $Worksheet.Cells.Item($Row, $Col).HorizontalAlignment = [Microsoft.Office.Interop.Excel.XlHAlign]::xlHAlignCenter
+        $Worksheet.Cells.Item($Row, $Col).VerticalAlignment = [Microsoft.Office.Interop.Excel.XlVAlign]::xlVAlignCenter
     }
-    
-    if ($null -ne $CellSettings.value) {
 
-        $Worksheet.Cells($Row, $Col) = $CellSettings.value
+    if ($null -ne $CellSettings.value) {
+        $Worksheet.Cells.Item($Row, $Col) = $CellSettings.value
     }
 }
 
@@ -329,10 +331,10 @@ function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
 #
 ##
 function Merge-Cells ($Worksheet, $Row1, $Col1, $Row2, $Col2) {
-    $cells = $Worksheet.Range($Worksheet.Cells($Row1, $Col1), $Worksheet.Cells($Row2, $Col2))
+    $cells = $Worksheet.Range($Worksheet.Cells.Item($Row1, $Col1), $Worksheet.Cells.Item($Row2, $Col2))
     $cells.Select()
     $cells.MergeCells = $true
-    $cells.Borders.LineStyle = $XLENUM.xlContinuous
+    $cells.Borders.LineStyle = [Microsoft.Office.Interop.Excel.XlLineStyle]::xlContinuous
 }
 
 

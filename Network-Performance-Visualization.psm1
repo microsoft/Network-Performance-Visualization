@@ -3,8 +3,6 @@
 . "$PSScriptRoot.\Data-Formatters.ps1"
 . "$PSScriptRoot.\Excel-Plotter.ps1"
 
-$XLENUM = New-Object -TypeName PSObject
-
 $NTTTCPPivots = @("sessions", "bufferLen", "bufferCount", "none")
 $LATTEPivots = @("protocol", "sendMethod", "none")
 $CTSPivots = @("sessions", "none")
@@ -137,7 +135,7 @@ function New-NetworkVisualization {
     $InnerPivot = if ($InnerPivot -eq "none") {""} else {$InnerPivot}
     $OuterPivot = if ($OuterPivot -eq "none") {""} else {$OuterPivot}
 
-    Initialize-XLENUM
+    Load-ExcelDll
 
     # Parse Data 
     $baselineRaw = Parse-Files -Tool $tool -DirName $BaselineDir
@@ -166,37 +164,18 @@ function New-NetworkVisualization {
     Write-Host "Created report at $filename"
 }
 
+<#
+.SYNOPSIS
+    This function loads Microsoft.Office.Interop.Excel.dll
+    so exported enums can be accessed. 
+#>
+function Load-ExcelDll {
+    $gac = "$env:WINDIR\assembly\GAC_MSIL"
+    $version = (Get-ChildItem "$gac\office" | select -Last 1).Name # e.g. 15.0.0.0__71e9bce111e9429c
 
-##
-# Initialize-XLENUM
-# -----------------
-# This function fills the content of the global object XLENUM with every enum value defined 
-# by the Excel application. 
-#
-# Parameters
-# ----------
-# None
-# 
-# Return
-# ------
-# None
-#
-##
-function Initialize-XLENUM {
-    $xl = New-Object -ComObject Excel.Application -ErrorAction Stop
-    $xl.Quit() | Out-Null
-
-    $xl.GetType().Assembly.GetExportedTypes() | Where-Object {$_.IsEnum} | ForEach-Object {
-        $enum = $_
-        $enum.GetEnumNames() | ForEach-Object {
-            $XLENUM | Add-Member -MemberType NoteProperty -Name $_ -Value $enum::($_) -Force
-        }
-    }
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($xl) | Out-Null
-    [System.GC]::Collect() | Out-Null
-    [System.GC]::WaitForPendingFinalizers() | Out-Null
+    Add-Type -Path "$gac\office\$version\office.dll"
+    Add-Type -Path "$gac\Microsoft.Office.Interop.Excel\$version\Microsoft.Office.Interop.Excel.dll"
 }
-
 
 ##
 # Get-ToolName
