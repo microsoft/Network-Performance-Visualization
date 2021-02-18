@@ -92,6 +92,7 @@ class PivotArgumentCompleter : ArgumentCompleter {
 #>
 function New-NetworkVisualization {
     [CmdletBinding()]
+    [Alias("New-NetVis")]
     param (
         [Parameter(Mandatory=$true, ParameterSetName="NTTTCP")]
         [Switch] $NTTTCP,
