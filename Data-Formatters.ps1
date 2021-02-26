@@ -546,7 +546,7 @@ function Format-Quartiles {
             }
             "chartSettings" = @{ 
                 "chartType"= [Microsoft.Office.Interop.Excel.XlChartType]::xlColumnStacked
-                "plotBy"   = [Microsoft.Office.Interop.Excel.Constants]::xlColumns
+                "plotBy"   = [Microsoft.Office.Interop.Excel.XlRowCol]::xlColumns
                 "xOffset"  = 1
                 "YOffset"  = 1
                 "title"    = "$cappedProp Quartiles"
