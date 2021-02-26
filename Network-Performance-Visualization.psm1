@@ -16,14 +16,11 @@ $CTSPivots = @("sessions", "none")
 
     if ($FakeBoundParameters.ContainsKey("NTTTCP")) {
         return $NTTTCPPivots | where {$_ -like "$WordToComplete*"}
-    }
-    elseif ($FakeBoundParameters.ContainsKey("LATTE")) {
+    } elseif ($FakeBoundParameters.ContainsKey("LATTE")) {
         return $LATTEPivots | where {$_ -like "$WordToComplete*"}
-    }
-    elseif ($FakeBoundParameters.ContainsKey("CTStraffic")) {
+    } elseif ($FakeBoundParameters.ContainsKey("CTStraffic")) {
         return $CTSPivots | where {$_ -like "$WordToComplete*"}
-    }
-    else {
+    } else {
         return @("")
     }
 }
@@ -126,15 +123,13 @@ function New-NetworkVisualization {
     $ErrorActionPreference = "Stop"
 
     $tool = $PSCmdlet.ParameterSetName
-    if (-Not (Validate-Pivots -tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot)) {
-        return
-    }
+    Confirm-Pivots -Tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot
 
     # Temporarily replace "none" with empty string to ensure compat.
     $InnerPivot = if ($InnerPivot -eq "none") {""} else {$InnerPivot}
     $OuterPivot = if ($OuterPivot -eq "none") {""} else {$OuterPivot}
 
-    Load-ExcelDll
+    Add-ExcelTypes
 
     # Parse Data 
     $baselineRaw = Parse-Files -Tool $tool -DirName $BaselineDir
@@ -146,13 +141,12 @@ function New-NetworkVisualization {
     $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot
 
     foreach ($oPivotKey in $processedData.data.Keys) {
-        if (@("NTTTCP", "CTStraffic") -contains $tool) {
+        if ($tool -in @("NTTTCP", "CTStraffic")) {
             $tables += Format-RawData -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
             $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Metrics @("min", "mean", "max", "std dev")
             $tables += Format-Quartiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
             $tables += Format-MinMaxChart -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
-        }
-        elseif (@("LATTE") -contains $tool ) {
+        } elseif ($tool -in @("LATTE")) {
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -SubSampleRate $SubsampleRate
             $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
             $tables += Format-Histogram -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
@@ -166,9 +160,9 @@ function New-NetworkVisualization {
 <#
 .SYNOPSIS
     This function loads Microsoft.Office.Interop.Excel.dll
-    so exported enums can be accessed. 
+    from the GAC so exported enums can be accessed. 
 #>
-function Load-ExcelDll {
+function Add-ExcelTypes {
     $gac = "$env:WINDIR\assembly\GAC_MSIL"
     $version = (Get-ChildItem "$gac\office" | select -Last 1).Name # e.g. 15.0.0.0__71e9bce111e9429c
 
@@ -176,80 +170,40 @@ function Load-ExcelDll {
     Add-Type -Path "$gac\Microsoft.Office.Interop.Excel\$version\Microsoft.Office.Interop.Excel.dll"
 }
 
-##
-# Validate-Pivots
-# ---------------
-# This function verifies that the user-provided pivots are valid pivots given the chosen context, and that the 
-# two pivots are not the same. 
-#
-# Parameters
-# ----------
-# Tool (string) - Name of the tool whose data is being visualized
-# InnerPivot (string) - Name of property to be used as the inner pivot variable
-# OuterPivot (string) - Name of property to be used as the outer pivot variable  
-#
-# Return
-# ------
-# Whether pivots are valid
-#
-##
-function Validate-Pivots ($Tool, $InnerPivot, $OuterPivot) {
-    if ($Tool -eq "NTTTCP") {
-        foreach ($curPivot in @($InnerPivot, $OuterPivot)) {
-            if (-Not ($NTTTCPPivots -contains $curPivot)) {
-                $msg = "This tool does not support using '$curPivot' as a pivot for NTTTCP data.`n"
-                $msg += "Supported pivots are:`n"
-
-                foreach ($pivot in $NTTTCPPivots) {
-                    if ($null -eq $pivot) {
-                        continue
-                    }
-                    $msg += "$pivot`n"
-                }
-                Write-Warning $msg
-                return $false
-            }    
+<#
+.SYNOPSIS
+    Check if user-provided pivots are valid pivots given the
+    chosen context, and that the two pivots are not the same. 
+.PARAMETER Tool
+    Name of the tool that 
+.PARAMETER InnerPivot
+    Property to be used as the inner pivot variable
+.PARAMETER OuterPivot
+    Property to be used as the outer pivot variable
+#>
+function Confirm-Pivots ($Tool, $InnerPivot, $OuterPivot) {
+    $validPivots = switch ($Tool) {
+        "NTTTCP" {
+            $NTTTCPPivots
+            break
+        }
+        "LATTE" {
+            $LATTEPivots
+            break
+        }
+        "CTSTraffic" {
+            $CTSPivots
+            break
         }
     }
 
-    if ($Tool -eq "LATTE") {
-        foreach ($curPivot in @($InnerPivot, $OuterPivot)) {
-            if (-Not ($LATTEPivots -contains $curPivot)) {
-                $msg = "This tool does not support using '$curPivot' as a pivot for LATTE data.`n"
-                $msg += "Supported pivots are:`n"
-
-                foreach ($pivot in $LATTEPivots) {
-                    if ($null -eq $pivot) {
-                        continue
-                    }
-                    $msg += "$pivot`n"
-                }
-                Write-Warning $msg
-                return $false
-            }    
-        } 
-    }
-
-    if ($Tool -eq "CTStraffic") {
-        foreach ($curPivot in @($InnerPivot, $OuterPivot)) {
-            if (-Not ($CTSPivots -contains $curPivot)) {
-                $msg = "This tool does not support using '$curPivot' as a pivot for CTStraffic data.`n"
-                $msg += "Supported pivots are:`n"
-
-                foreach ($pivot in $CTSPivots) {
-                    if ($null -eq $pivot) {
-                        continue
-                    }
-                    $msg += "$pivot`n"
-                }
-                Write-Warning $msg
-                return $false
-            }    
+    foreach ($curPivot in @($InnerPivot, $OuterPivot)) {
+        if ($curPivot -notin $validPivots) {
+            Write-Error "Invalid pivot property '$curPivot'. Supported pivots for $Tool are: $($validPivots -join ", ")." -ErrorAction "Stop"
         }
     }
+
     if (($InnerPivot -eq $OuterPivot) -and ($InnerPivot -ne "none")) {
-        Write-Warning "Cannot use the same property for both inner and outer pivots."
-        return $false
+        Write-Error "Cannot use the same property for both inner and outer pivots." -ErrorAction "Stop"
     }
-    return $true
 }
