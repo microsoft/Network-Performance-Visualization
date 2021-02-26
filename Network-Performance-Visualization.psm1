@@ -124,9 +124,8 @@ function New-NetworkVisualization {
     )
 
     $ErrorActionPreference = "Stop"
-    
-    # Save tool name
-    $tool = Get-ToolName -NTTTCP $NTTTCP -LATTE $LATTE -CTStraffic $CTStraffic
+
+    $tool = $PSCmdlet.ParameterSetName
     if (-Not (Validate-Pivots -tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot)) {
         return
     }
@@ -142,7 +141,7 @@ function New-NetworkVisualization {
     $testRaw     = $null
     if ($TestDir) {
         $testRaw = Parse-Files -Tool $tool -DirName $TestDir
-    } 
+    }
 
     $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot
 
@@ -157,7 +156,7 @@ function New-NetworkVisualization {
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -SubSampleRate $SubsampleRate
             $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
             $tables += Format-Histogram -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-        } 
+        }
         $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
     }
     $fileName = Create-ExcelFile -Tables $tables -SavePath $SavePath 
@@ -176,35 +175,6 @@ function Load-ExcelDll {
     Add-Type -Path "$gac\office\$version\office.dll"
     Add-Type -Path "$gac\Microsoft.Office.Interop.Excel\$version\Microsoft.Office.Interop.Excel.dll"
 }
-
-##
-# Get-ToolName
-# ------------
-# Given three tool flags, this function returns a string containing the name of the tool whose data is being visualized
-# 
-# Parameters
-# ----------
-# NTTTCP (bool) - Whether tool is being run in NTTTCP context
-# LATTE (bool) - Whether tool is being run in LATTE context
-# CTStraffic (bool) - Whether tool is being run in CTStraffic context
-#
-# Return
-# ------
-# Name of tool whose data is being visualized
-#
-##
-function Get-ToolName ($NTTTCP, $LATTE, $CTStraffic) {
-    if ($NTTTCP) {
-        return "NTTTCP"
-    }
-    if ($LATTE) {
-        return "LATTE"
-    }
-    if ($CTStraffic) {
-        return "CTStraffic"
-    }
-}
-
 
 ##
 # Validate-Pivots
