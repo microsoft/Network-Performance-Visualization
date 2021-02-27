@@ -1,11 +1,14 @@
 ﻿using namespace Microsoft.Office.Interop
 
-$LIGHTGREEN = 10416289
-$GREEN = 1268766
-$LIGHTRED = 10396159
-$RED = 2108032
-$BLUES = @(10249511, 14058822, 16758932)
-$ORANGES = @(294092, 1681916, 6014716)
+# Excel uses BGR color values
+$ColorPalette = @{
+    "LightGreen" = 0x9EF0A1
+    "Green"      = 0x135C1E
+    "LightRed"   = 0x9EA1FF
+    "Red"        = 0x202A80
+    "Blue"      = @(0x9C6527, 0xD68546, 0xFFB894)
+    "Orange"    = @(0x047CCC, 0x19A9FC, 0x5BC6FC)
+}
 
 $EPS = 0.0001
 
@@ -83,13 +86,13 @@ function Format-RawData {
                 "  " = @{
                     "  " = @{
                         "value"     = "Improvement"
-                        "fontColor" = $GREEN
-                        "cellColor" = $LIGHTGREEN
+                        "fontColor" = $ColorPalette.Green
+                        "cellColor" = $ColorPalette.LightGreen
                     }
                     "   " = @{
                         "value"     = "Regression"
-                        "fontColor" = $RED
-                        "cellColor" = $LIGHTRED
+                        "fontColor" = $ColorPalette.Red
+                        "cellColor" = $ColorPalette.LightRed
                     }
                 } 
             }
@@ -704,43 +707,43 @@ function Format-MinMaxChart {
         if ($meta.comparison) {
             $table.chartSettings.seriesSettings = @{
                 1 = @{
-                    "color"       = $BLUES[2]
-                    "markerColor" = $BLUES[2]
+                    "color"       = $ColorPalette.Blue[2]
+                    "markerColor" = $ColorPalette.Blue[2]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 2 = @{
-                    "color"       = $ORANGES[2]
-                    "markerColor" = $ORANGES[2]
+                    "color"       = $ColorPalette.Orange[2]
+                    "markerColor" = $ColorPalette.Orange[2]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 3 = @{
-                    "color"       = $BLUES[1]
-                    "markerColor" = $BLUES[1]
+                    "color"       = $ColorPalette.Blue[1]
+                    "markerColor" = $ColorPalette.Blue[1]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 4 = @{
-                    "color"       = $ORANGES[1]
-                    "markerColor" = $ORANGES[1]
+                    "color"       = $ColorPalette.Orange[1]
+                    "markerColor" = $ColorPalette.Orange[1]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 5 = @{
-                    "color"       = $BLUES[0]
-                    "markerColor" = $BLUES[0]
+                    "color"       = $ColorPalette.Blue[0]
+                    "markerColor" = $ColorPalette.Blue[0]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 6 = @{
-                    "color"       = $ORANGES[0]
-                    "markerColor" = $ORANGES[0]
+                    "color"       = $ColorPalette.Orange[0]
+                    "markerColor" = $ColorPalette.Orange[0]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
@@ -750,22 +753,22 @@ function Format-MinMaxChart {
         else {
             $table.chartSettings.seriesSettings = @{
                 1 = @{
-                    "color"       = $BLUES[2]
-                    "markerColor" = $BLUES[2]
+                    "color"       = $ColorPalette.Blue[2]
+                    "markerColor" = $ColorPalette.Blue[2]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 2 = @{
-                    "color"       = $BLUES[1]
-                    "markerColor" = $BLUES[1]
+                    "color"       = $ColorPalette.Blue[1]
+                    "markerColor" = $ColorPalette.Blue[1]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 3 = @{
-                    "color"       = $BLUES[0]
-                    "markerColor" = $BLUES[0]
+                    "color"       = $ColorPalette.Blue[0]
+                    "markerColor" = $ColorPalette.Blue[0]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
@@ -929,7 +932,7 @@ function Format-Percentiles {
                     "chartType" = [Excel.XlChartType]::xlXYScatterLinesNoMarkers
                     "seriesSettings" = @{
                         1 = @{ 
-                            "color"      = $BLUES[1]
+                            "color"      = $ColorPalette.Blue[1]
                             "lineWeight" = 3
                         }
                     }
@@ -976,7 +979,7 @@ function Format-Percentiles {
                     "delete" = $true
                 }
                 $table.chartSettings.seriesSettings[3] = @{
-                    "color"      = $ORANGES[1]
+                    "color"      = $ColorPalette.Orange[1]
                     "lineWeight" = 3
                 }
                 $table.meta.columnFormats = @($meta.format.$prop, $meta.format."% change", $meta.format.$prop)
@@ -1125,13 +1128,13 @@ function Format-Histogram {
                 "  " = @{
                     "  " = @{
                         "value"     = "increase"
-                        "fontColor" = $GREEN
-                        "cellColor" = $LIGHTGREEN
+                        "fontColor" = $ColorPalette.Green
+                        "cellColor" = $ColorPalette.LightGreen
                     }
                     "   " = @{
                         "value"     = "decrease"
-                        "fontColor" = $RED
-                        "cellColor" = $LIGHTRED
+                        "fontColor" = $ColorPalette.Red
+                        "cellColor" = $ColorPalette.LightRed
                     }
                 } 
             }
@@ -1184,7 +1187,7 @@ function Format-Histogram {
                     "xOffset" = 1
                     "seriesSettings" = @{
                         1 = @{ 
-                            "color"      = $BLUES[1]
+                            "color"      = $ColorPalette.Blue[1]
                             "lineWeight" = 3
                             "name" = "Sample Count"
                         }
@@ -1224,7 +1227,7 @@ function Format-Histogram {
                 $table.chartSettings.seriesSettings[1].name = "Baseline Sample Count"
                     
                 $table.chartSettings.seriesSettings[3] = @{
-                    "color"      = $ORANGES[1]
+                    "color"      = $ColorPalette.Orange[1]
                     "name"       = "Test Sample Count"
                     "lineWeight" = 3
                 }
@@ -1379,8 +1382,8 @@ function Format-Distribution {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
                             "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
-                            "markerBackgroundColor" = $BLUES[2]
-                            "markerForegroundColor" = $BLUES[1]
+                            "markerBackgroundColor" = $ColorPalette.Blue[2]
+                            "markerForegroundColor" = $ColorPalette.Blue[1]
                             "name"                  = "$prop Sample" 
                         }
                 }
@@ -1388,8 +1391,8 @@ function Format-Distribution {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
                             "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
-                            "markerBackgroundColor" = $ORANGES[2]
-                            "markerForegroundColor" = $ORANGES[1]
+                            "markerBackgroundColor" = $ColorPalette.Orange[2]
+                            "markerForegroundColor" = $ColorPalette.Orange[1]
                             "name"                  = "$prop Sample"
                         }
                 }
@@ -1511,22 +1514,22 @@ function Format-Distribution {
 function Select-Color ($Cell, $TestVal, $BaseVal, $Goal) {
     if ( $Goal -eq "increase") {
         if ($TestVal -ge $BaseVal) {
-            $Cell["fontColor"] = $GREEN
-            $Cell["cellColor"] = $LIGHTGREEN
+            $Cell["fontColor"] = $ColorPalette.Green
+            $Cell["cellColor"] = $ColorPalette.LightGreen
         } 
         else {
-            $Cell["fontColor"] = $RED
-            $Cell["cellColor"] = $LIGHTRED
+            $Cell["fontColor"] = $ColorPalette.Red
+            $Cell["cellColor"] = $ColorPalette.LightRed
         }
     } 
     else {
         if ($TestVal -le $BaseVal) {
-            $Cell["fontColor"] = $GREEN
-            $Cell["cellColor"] = $LIGHTGREEN
+            $Cell["fontColor"] = $ColorPalette.Green
+            $Cell["cellColor"] = $ColorPalette.LightGreen
         } 
         else {
-            $Cell["fontColor"] = $RED
-            $Cell["cellColor"] = $LIGHTRED
+            $Cell["fontColor"] = $ColorPalette.Red
+            $Cell["cellColor"] = $ColorPalette.LightRed
         }
     }
     return $cell
