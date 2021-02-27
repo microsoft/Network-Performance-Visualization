@@ -1,4 +1,6 @@
-﻿$LIGHTGREEN = 10416289
+﻿using namespace Microsoft.Office.Interop
+
+$LIGHTGREEN = 10416289
 $GREEN = 1268766
 $LIGHTRED = 10396159
 $RED = 2108032
@@ -545,8 +547,8 @@ function Format-Quartiles {
                 }
             }
             "chartSettings" = @{ 
-                "chartType"= [Microsoft.Office.Interop.Excel.XlChartType]::xlColumnStacked
-                "plotBy"   = [Microsoft.Office.Interop.Excel.XlRowCol]::xlColumns
+                "chartType"= [Excel.XlChartType]::xlColumnStacked
+                "plotBy"   = [Excel.XlRowCol]::xlColumns
                 "xOffset"  = 1
                 "YOffset"  = 1
                 "title"    = "$cappedProp Quartiles"
@@ -681,8 +683,8 @@ function Format-MinMaxChart {
                 }
             }
             "chartSettings" = @{
-                "chartType"    = [Microsoft.Office.Interop.Excel.XlChartType]::xlLineMarkers
-                "plotBy"       = [Microsoft.Office.Interop.Excel.XlRowCol]::xlRows
+                "chartType"    = [Excel.XlChartType]::xlLineMarkers
+                "plotBy"       = [Excel.XlRowCol]::xlRows
                 "title"        = $cappedProp
                 "xOffset"      = 1
                 "yOffset"      = 2
@@ -704,42 +706,42 @@ function Format-MinMaxChart {
                 1 = @{
                     "color"       = $BLUES[2]
                     "markerColor" = $BLUES[2]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 2 = @{
                     "color"       = $ORANGES[2]
                     "markerColor" = $ORANGES[2]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 3 = @{
                     "color"       = $BLUES[1]
                     "markerColor" = $BLUES[1]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 4 = @{
                     "color"       = $ORANGES[1]
                     "markerColor" = $ORANGES[1]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 5 = @{
                     "color"       = $BLUES[0]
                     "markerColor" = $BLUES[0]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 6 = @{
                     "color"       = $ORANGES[0]
                     "markerColor" = $ORANGES[0]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
@@ -750,21 +752,21 @@ function Format-MinMaxChart {
                 1 = @{
                     "color"       = $BLUES[2]
                     "markerColor" = $BLUES[2]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 2 = @{
                     "color"       = $BLUES[1]
                     "markerColor" = $BLUES[1]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 3 = @{
                     "color"       = $BLUES[0]
                     "markerColor" = $BLUES[0]
-                    "markerStyle" = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                    "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
@@ -924,7 +926,7 @@ function Format-Percentiles {
                     "title"     = $chartTitle
                     "yOffset"   = 1
                     "xOffset"   = 1
-                    "chartType" = [Microsoft.Office.Interop.Excel.XlChartType]::xlXYScatterLinesNoMarkers
+                    "chartType" = [Excel.XlChartType]::xlXYScatterLinesNoMarkers
                     "seriesSettings" = @{
                         1 = @{ 
                             "color"      = $BLUES[1]
@@ -1353,7 +1355,7 @@ function Format-Distribution {
                     }
                 }
                 "chartSettings" = @{
-                    "chartType" = [Microsoft.Office.Interop.Excel.XlChartType]::xlXYScatter
+                    "chartType" = [Excel.XlChartType]::xlXYScatter
                     "yOffset"   = 2
                     "xOffset"   = 2
                     "title"     = "Temporal Latency Distribution"
@@ -1376,7 +1378,7 @@ function Format-Distribution {
             if ($mode -eq "baseline") {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
-                            "markerStyle"           = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                            "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                             "markerBackgroundColor" = $BLUES[2]
                             "markerForegroundColor" = $BLUES[1]
                             "name"                  = "$prop Sample" 
@@ -1385,7 +1387,7 @@ function Format-Distribution {
             } else {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
-                            "markerStyle"           = [Microsoft.Office.Interop.Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                            "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                             "markerBackgroundColor" = $ORANGES[2]
                             "markerForegroundColor" = $ORANGES[1]
                             "name"                  = "$prop Sample"

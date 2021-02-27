@@ -1,4 +1,6 @@
-﻿$MINCOLUMNWIDTH = 7.0
+﻿using namespace Microsoft.Office.Interop
+
+$MINCOLUMNWIDTH = 7.0
 
 
 ##
@@ -65,7 +67,7 @@ function Create-ExcelFile {
     
     Fit-Cells -Worksheet $worksheetObject
 
-    $workbookObject.SaveAs($savePath, [Microsoft.Office.Interop.Excel.XlFileFormat]::xlOpenXMLWorkbook) | Out-Null  
+    $workbookObject.SaveAs($savePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook) | Out-Null  
     $workbookObject.Saved = $true 
     $workbookObject.Close() | Out-Null
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject) | Out-Null  
@@ -133,19 +135,19 @@ function Format-ExcelSheet ($Worksheet, $Table, $RowOffset) {
         foreach ($col in $Table.meta.leftAlign) {
             $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, $col), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $col))
             $selection.select() | Out-Null
-            $selection.HorizontalAlignment = [Microsoft.Office.Interop.Excel.XlHAlign]::xlHAlignLeft
+            $selection.HorizontalAlignment = [Excel.XlHAlign]::xlHAlignLeft
         }
     }
     if ($Table.meta.rightAlign) {
         foreach ($col in $Table.meta.rightAlign) {
             $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, $col), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $col))
             $selection.select() | Out-Null
-            $selection.HorizontalAlignment = [Microsoft.Office.Interop.Excel.XlHAlign]::xlHAlignLeft
+            $selection.HorizontalAlignment = [Excel.XlHAlign]::xlHAlignLeft
         }
     }
     $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, 1), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $Table.meta.rowLabelDepth + $Table.meta.dataWidth))
     $selection.select() | Out-Null
-    $selection.BorderAround([Microsoft.Office.Interop.Excel.XlLineStyle]::xlContinuous, [Microsoft.Office.Interop.Excel.XlBorderWeight]::xlThick) | Out-Null
+    $selection.BorderAround([Excel.XlLineStyle]::xlContinuous, [Excel.XlBorderWeight]::xlThick) | Out-Null
 }
 
 
@@ -242,7 +244,7 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MaximumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.max
             }
             if ($Table.chartSettings.axisSettings.$axisNum.logarithmic) {
-                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).scaleType = [Microsoft.Office.Interop.Excel.XlScaleType]::xlScaleLogarithmic
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).scaleType = [Excel.XlScaleType]::xlScaleLogarithmic
             }
             if ($Table.chartSettings.axisSettings.$axisNum.title) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).HasTitle = $true
@@ -289,7 +291,7 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
 #
 ##
 function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
-    $Worksheet.Cells.Item($Row, $Col).Borders.LineStyle = [Microsoft.Office.Interop.Excel.XlLineStyle]::xlContinuous
+    $Worksheet.Cells.Item($Row, $Col).Borders.LineStyle = [Excel.XlLineStyle]::xlContinuous
     if ($CellSettings.fontColor) {
         $Worksheet.Cells.Item($Row, $Col).Font.Color = $CellSettings.fontColor
     }
@@ -303,8 +305,8 @@ function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
     }
 
     if ($CellSettings.center) {
-        $Worksheet.Cells.Item($Row, $Col).HorizontalAlignment = [Microsoft.Office.Interop.Excel.XlHAlign]::xlHAlignCenter
-        $Worksheet.Cells.Item($Row, $Col).VerticalAlignment = [Microsoft.Office.Interop.Excel.XlVAlign]::xlVAlignCenter
+        $Worksheet.Cells.Item($Row, $Col).HorizontalAlignment = [Excel.XlHAlign]::xlHAlignCenter
+        $Worksheet.Cells.Item($Row, $Col).VerticalAlignment = [Excel.XlVAlign]::xlVAlignCenter
     }
 
     if ($null -ne $CellSettings.value) {
@@ -334,7 +336,7 @@ function Merge-Cells ($Worksheet, $Row1, $Col1, $Row2, $Col2) {
     $cells = $Worksheet.Range($Worksheet.Cells.Item($Row1, $Col1), $Worksheet.Cells.Item($Row2, $Col2))
     $cells.Select()
     $cells.MergeCells = $true
-    $cells.Borders.LineStyle = [Microsoft.Office.Interop.Excel.XlLineStyle]::xlContinuous
+    $cells.Borders.LineStyle = [Excel.XlLineStyle]::xlContinuous
 }
 
 
