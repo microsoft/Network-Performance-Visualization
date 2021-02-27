@@ -29,13 +29,13 @@ function Create-ExcelFile {
     )
 
     $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
-    
+
     # Can be set to true for debugging purposes
     $excelObject.Visible = $false
 
     $workbookObject = $excelObject.Workbooks.Add()
     $worksheetObject = $workbookObject.Worksheets.Item(1)
-        
+
     $rowOffset = 1
     $chartNum  = 1
     $first = $true
@@ -54,28 +54,28 @@ function Create-ExcelFile {
             continue
         }
 
-        Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) -row $rowOffset | Out-Null
-        Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) -col 1 | Out-Null
-        Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset) | Out-Null
+        $null = Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) -row $rowOffset
+        $null = Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) -col 1
+        $null = Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset)
         if ($table.chartSettings) {
-            Create-Chart -Worksheet $worksheetObject -Table $table -StartCol 1 -StartRow $rowOffset -chartNum $chartNum | Out-Null
+            $null = Create-Chart -Worksheet $worksheetObject -Table $table -StartCol 1 -StartRow $rowOffset -chartNum $chartNum
             $chartNum += 1
         }
-            Format-ExcelSheet -Worksheet $worksheetObject -Table $table -RowOffset $rowOffset
+        Format-ExcelSheet -Worksheet $worksheetObject -Table $table -RowOffset $rowOffset
         $rowOffset += $table.meta.colLabelDepth + $table.meta.dataHeight + 1
     }
-    
+
     Fit-Cells -Worksheet $worksheetObject
 
-    $workbookObject.SaveAs($savePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook) | Out-Null  
-    $workbookObject.Saved = $true 
-    $workbookObject.Close() | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject) | Out-Null  
+    $null = $workbookObject.SaveAs($savePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook)
+    $workbookObject.Saved = $true
+    $null = $workbookObject.Close()
+    $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject)
 
-    $excelObject.Quit() | Out-Null
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObject) | Out-Null
-    [System.GC]::Collect() | Out-Null
-    [System.GC]::WaitForPendingFinalizers() | Out-Null
+    $null = $excelObject.Quit()
+    $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObject)
+    $null = [System.GC]::Collect()
+    $null = [System.GC]::WaitForPendingFinalizers()
 
     return [string]$savePath
 }
@@ -95,8 +95,8 @@ function Create-ExcelFile {
 # None
 ##
 function Fit-Cells ($Worksheet) {
-    $Worksheet.UsedRange.Columns.Autofit() | Out-Null
-    $Worksheet.UsedRange.Rows.Autofit() | Out-Null
+    $null = $Worksheet.UsedRange.Columns.Autofit()
+    $null = $Worksheet.UsedRange.Rows.Autofit()
     foreach ($column in $Worksheet.UsedRange.Columns) {
         if ($column.ColumnWidth -lt $MINCOLUMNWIDTH) {
             $column.ColumnWidth = $MINCOLUMNWIDTH
@@ -126,7 +126,7 @@ function Format-ExcelSheet ($Worksheet, $Table, $RowOffset) {
         for ($i = 0; $i -lt $Table.meta.columnFormats.Count; $i++) {
             if ($Table.meta.columnFormats[$i]) {
                 $column = $worksheetObject.Range($Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth, 1 + $Table.meta.rowLabelDepth + $i), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, 1 + $Table.meta.rowLabelDepth + $i))
-                $column.select() | Out-Null
+                $null = $column.select()
                 $column.NumberFormat = $Table.meta.columnFormats[$i]
             }
         }
@@ -134,20 +134,20 @@ function Format-ExcelSheet ($Worksheet, $Table, $RowOffset) {
     if ($Table.meta.leftAlign) {
         foreach ($col in $Table.meta.leftAlign) {
             $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, $col), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $col))
-            $selection.select() | Out-Null
+            $null = $selection.select()
             $selection.HorizontalAlignment = [Excel.XlHAlign]::xlHAlignLeft
         }
     }
     if ($Table.meta.rightAlign) {
         foreach ($col in $Table.meta.rightAlign) {
             $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, $col), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $col))
-            $selection.select() | Out-Null
+            $null = $selection.select()
             $selection.HorizontalAlignment = [Excel.XlHAlign]::xlHAlignLeft
         }
     }
     $selection = $Worksheet.Range($Worksheet.Cells.Item($RowOffset, 1), $Worksheet.Cells.Item($RowOffset + $Table.meta.colLabelDepth + $Table.meta.dataHeight - 1, $Table.meta.rowLabelDepth + $Table.meta.dataWidth))
-    $selection.select() | Out-Null
-    $selection.BorderAround([Excel.XlLineStyle]::xlContinuous, [Excel.XlBorderWeight]::xlThick) | Out-Null
+    $null = $selection.select()
+    $null = $selection.BorderAround([Excel.XlLineStyle]::xlContinuous, [Excel.XlBorderWeight]::xlThick)
 }
 
 
@@ -363,13 +363,13 @@ function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
     foreach ($label in $Cols.Keys) {
         if ($Cols.$label.GetType().Name -ne "Int32") {
             $subRange = Fill-ColLabels -Worksheet $Worksheet -Cols $Cols.$label -StartCol $StartCol -Row ($Row + 1)
-            Merge-Cells -Worksheet $Worksheet -Row1 $Row -Col1 $subRange[0] -Row2 $Row -Col2 $subRange[1] | Out-Null
+            $null = Merge-Cells -Worksheet $Worksheet -Row1 $Row -Col1 $subRange[0] -Row2 $Row -Col2 $subRange[1]
             $cellSettings = @{
                 "value" = $label
                 "bold" = $true
                 "center" = $true
             }
-            Fill-Cell -Worksheet $Worksheet -Row $Row -Col $subRange[0] -CellSettings $cellSettings | Out-Null
+            $null = Fill-Cell -Worksheet $Worksheet -Row $Row -Col $subRange[0] -CellSettings $cellSettings
             if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1)) {
                 $range[0] = $subRange[0]
             } 
@@ -383,7 +383,7 @@ function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
                 "bold" = $true
                 "center" = $true
             }
-            Fill-Cell $Worksheet -Row $Row -Col ($StartCol + $Cols.$label) -CellSettings $cellSettings | Out-Null
+            $null = Fill-Cell $Worksheet -Row $Row -Col ($StartCol + $Cols.$label) -CellSettings $cellSettings
             if (($StartCol + $Cols.$label -lt $range[0]) -or ($range[0] -eq -1)) {
                 $range[0] = $StartCol + $Cols.$label
             }
@@ -419,13 +419,13 @@ function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
     foreach ($label in $rows.Keys) {
         if ($Rows.$label.GetType().Name -ne "Int32") {
             $subRange = Fill-RowLabels -Worksheet $Worksheet -Rows $Rows.$label -StartRow $StartRow -Col ($Col + 1)
-            Merge-Cells -Worksheet $Worksheet -Row1 $subRange[0] -Col1 $Col -Row2 $subRange[1] -Col2 $Col | Out-Null
+            $null = Merge-Cells -Worksheet $Worksheet -Row1 $subRange[0] -Col1 $Col -Row2 $subRange[1] -Col2 $Col
             $cellSettings = @{
                 "value" = $label
                 "bold" = $true
                 "center" = $true
             }
-            Fill-Cell -Worksheet $Worksheet -Row $subRange[0] -Col $Col -CellSettings $cellSettings | Out-Null
+            $null = Fill-Cell -Worksheet $Worksheet -Row $subRange[0] -Col $Col -CellSettings $cellSettings
             if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1)) {
                 $range[0] = $subRange[0]
             } 
@@ -439,7 +439,7 @@ function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
                 "bold" = $true
                 "center" = $true
             }
-            Fill-Cell $Worksheet -Row ($StartRow + $Rows.$label) -Col $Col -CellSettings $cellSettings | Out-Null
+            $null = Fill-Cell $Worksheet -Row ($StartRow + $Rows.$label) -Col $Col -CellSettings $cellSettings
             if (($StartRow + $Rows.$label -lt $range[0]) -or ($range[0] -eq -1)) {
                 $range[0] = $StartRow + $Rows.$label
             }
