@@ -22,7 +22,7 @@ $ABBREVIATIONS = @{
     "sendMethod" = "sndMthd" 
 }
 
-$THROUGHPUTS = @(1, 10, 25, 40, 50, 100, 200, 400)
+
 
 
 ##
@@ -938,7 +938,7 @@ function Format-Percentiles {
                     }
                     "axisSettings" = @{
                         1 = @{
-                            "max"            = 100
+                            #"max"            = 100
                             "title"          = "Percentiles"
                             "minorGridlines" = $true
                         }
@@ -949,13 +949,6 @@ function Format-Percentiles {
                 }
             }
 
-            if ($prop -eq "throughput") {
-                $max = Get-ThroughputMax -Data $data -OPivotKey $OPivotKey -IPivotKey $IPivotKey -Meta $meta
-                if ($max -ne -1) {
-                    $table.chartSettings.axisSettings[2].max = $max
-                }
-            }
-                
             $table.chartSettings.axisSettings[2].logarithmic = Set-Logarithmic -Data $data -OPivotKey $OPivotKey -Prop $prop -IPivotKey $IPivotKey -Meta $meta 
 
             if ($meta.comparison) {
@@ -1061,25 +1054,6 @@ function Set-Logarithmic ($Data, $OPivotKey, $Prop, $IPivotKey, $Meta) {
         }
     }
     return $false
-}
-
-function Get-ThroughputMax ($Data, $OPivotKey, $IPivotKey, $Meta) {
-    $max = -1
-    foreach ($val in $THROUGHPUTS) {
-        if ($val -gt $Data.$OPivotKey.throughput.$IPivotKey.baseline.stats.max) {
-            if ($Meta.comparison) {
-                if ($val -gt $data.$OPivotKey.throughput.$IPivotKey.test.stats.max) {
-                    $max = $val
-                    break
-                }
-            } 
-            else {
-                $max = $val 
-                break
-            }
-        }
-    }
-    return $max
 }
 
 function Format-Histogram {
