@@ -219,7 +219,7 @@ function Format-RawData {
                         "Goal"    = $meta.goal.$prop
                     }
                     
-                    $table.data.$tableTitle.$innerPivot.$iPivotKey.test.$prop.$filename = Select-Color @params
+                    $table.data.$tableTitle.$innerPivot.$iPivotKey.test.$prop.$filename = Set-CellColor @params
                 }
             } 
             else {
@@ -437,10 +437,10 @@ function Format-Stats {
                     # Color % change cell if necessary
                     if (@("std dev", "variance", "std err", "range") -contains $metric) {
                         $params.goal = "decrease"
-                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Select-Color @params
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Set-CellColor @params
                     } 
                     elseif ( -not (@("sum", "count", "kurtosis", "skewness") -contains $metric)) {
-                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Select-Color @params
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Set-CellColor @params
                     }
                 }
             }
@@ -1010,7 +1010,7 @@ function Format-Percentiles {
                         "BaseVal" = $data.$OPivotKey.$prop.$IPivotKey.baseline.$MetricName[$percentile]
                         "Goal"    = $meta.goal.$prop
                     }
-                    $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = Select-Color @params
+                    $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = Set-CellColor @params
                 } 
                 else {
                     $table.data.$tableTitle.$prop.percentiles[$percentile] = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.$metricName.$percentile}
@@ -1258,7 +1258,7 @@ function Format-Histogram {
                         "BaseVal" = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram[$bucket]
                         "Goal"    = "increase"
                     }
-                    $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = Select-Color @params
+                    $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = Set-CellColor @params
                 } 
                 else {
                     $table.data.$tableTitle.$prop."histogram buckets"[$bucket] = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.$bucket}
@@ -1491,50 +1491,33 @@ function Format-Distribution {
     return $tables
 }
 
-
-##
-# Select-Color
-# ------------
-# This function selects the color of a cell, indicating whether a test value
-# shows an improvement when compared to a baseline value. Improvement is defined
-# by the goal (increase/decrease) for the given value.
-# 
-# Parameters
-# ----------
-# Cell (HashTable) - Object containg a cell's value and other settings
-# TestVal (decimal) - Test value
-# BaseVal (decimal) - Baseline value
-# Goal (String) - Defines improvement ("increase" or "decrease")
-#
-# Return
-# ------
-# HashTable - Object containing a cell's value and other settings
-#
-##  
-function Select-Color ($Cell, $TestVal, $BaseVal, $Goal) {
-    if ( $Goal -eq "increase") {
-        if ($TestVal -ge $BaseVal) {
+<#
+.SYNOPSIS
+    Sets the colors of a cell, indicating whether a test value shows
+    an improvement when compared to a baseline value. Improvement is
+    defined by the goal (increase/decrease) for the given value.
+.PARAMETER Cell
+    Object containg a cell's value and other settings.
+.PARAMETER TestVal
+    Test metric value.
+.PARAMETER BaseVal
+    Baseline metric value.
+.PARAMETER Goal
+    Defines improvement ("increase" or "decrease")
+#>
+function Set-CellColor ($Cell, $TestVal, $BaseVal, $Goal) {
+    if ($TestVal -ne $BaseVal) {
+        if (($Goal -eq "increase") -eq ($TestVal -gt $BaseVal)) {
             $Cell["fontColor"] = $ColorPalette.Green
             $Cell["cellColor"] = $ColorPalette.LightGreen
-        } 
-        else {
-            $Cell["fontColor"] = $ColorPalette.Red
-            $Cell["cellColor"] = $ColorPalette.LightRed
-        }
-    } 
-    else {
-        if ($TestVal -le $BaseVal) {
-            $Cell["fontColor"] = $ColorPalette.Green
-            $Cell["cellColor"] = $ColorPalette.LightGreen
-        } 
-        else {
+        } else {
             $Cell["fontColor"] = $ColorPalette.Red
             $Cell["cellColor"] = $ColorPalette.LightRed
         }
     }
-    return $cell
-}
 
+    return $Cell
+}
 
 ##
 # Get-TreeWidth
