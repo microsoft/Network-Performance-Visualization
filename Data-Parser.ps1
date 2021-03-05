@@ -74,7 +74,6 @@ function Parse-Files {
                 }
                 "format" = @{
                     "latency"  = "#.0"
-                    "% change" = "+#.0%;-#.0%;0.0%"
                 }
                 "noTable"  = [Array]@("filename", "sendMethod", "protocol")
             }

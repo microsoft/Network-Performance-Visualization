@@ -1,5 +1,7 @@
 ﻿using namespace Microsoft.Office.Interop
 
+$TextInfo = (Get-Culture).TextInfo
+
 # Excel uses BGR color values
 $ColorPalette = @{
     "LightGreen" = 0x9EF0A1
@@ -18,12 +20,9 @@ $ABBREVIATIONS = @{
     "sessions" = "sess."
     "bufferLen" = "bufLen."
     "bufferCount" = "bufCt."
-    "protocol" = "protocol"
+    "protocol" = ""
     "sendMethod" = "sndMthd" 
 }
-
-
-
 
 ##
 # Format-RawData
@@ -1056,190 +1055,165 @@ function Set-Logarithmic ($Data, $OPivotKey, $Prop, $IPivotKey, $Meta) {
     return $false
 }
 
-function Format-Histogram {
-    Param (
-        [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
-
-        [Parameter(Mandatory=$true)] $OPivotKey,
-
-        [Parameter()] [String] $Tool = "",
-
-        [Parameter()] [switch] $NoNewWorksheets
+<#
+.SYNOPSIS
+    Returns a template for Format-Histogram
+#>
+function Get-HistogramTemplate {
+    param(
+        [PSObject[]] $DataObj,
+        [String] $TableTitle,
+        [String] $Property,
+        [String] $IPivotKey
     )
 
-    $legend = @{
-        "meta" = @{
-            "colLabelDepth" = 2
-            "rowLabelDepth" = 2
-            "dataWidth"     = 2
-            "dataHeight"    = 3 
-        }
-        "rows" = @{
-            " "   = 0
-            "  "  = 1
-            "   " = 2
-        }
-        "cols" = @{
-            "legend" = @{
-                " "  = 0
-                "  " = 1
-            }
-        }
-        "data" = @{
-            "legend" = @{
-                " " = @{
-                    " " = @{
-                        "value" = "For side by side comparison,`n we compare each buckets share of its `ndataset's total latency samples.  
-"
-                    }
-                    "  " = @{
-                        "value" = "buckets whose share of total `nsamples increased are colored: "
-                    }
-                    "   " = @{
-                        "value" = "buckets whose share of total `nsamples decreased are colored:"
-                    }
-                }
-                "  " = @{
-                    "  " = @{
-                        "value"     = "increase"
-                        "fontColor" = $ColorPalette.Green
-                        "cellColor" = $ColorPalette.LightGreen
-                    }
-                    "   " = @{
-                        "value"     = "decrease"
-                        "fontColor" = $ColorPalette.Red
-                        "cellColor" = $ColorPalette.LightRed
-                    }
-                } 
-            }
-        }
+    $meta = $DataObj.meta
+
+    $chartTitle = if ($IPivotKey) {
+        "$Property Histogram - $IPivotKey $($meta.InnerPivot)"
+    } else {
+        "$Property Histogram"
     }
 
-    $tables     = @()
-    $data       = $DataObj.data
-    $meta       = $DataObj.meta
-    $innerPivot = $meta.InnerPivot
-    $outerPivot = $meta.OuterPivot 
+    $table = @{
+        "rows" = @{
+            "histogram buckets" = @{}
+        }
+        "cols" = @{
+            $TableTitle = @{
+                $Property = 0
+            }
+        }
+        "meta" = @{
+            "rightAlign" = [Array] @(2)
+            "columnFormats" = @("0.0%")
+        }
+        "data" = @{
+            $TableTitle = @{
+                $Property = @{
+                    "histogram buckets" = @{}
+                }
+            }
+        }
+        "chartSettings"= @{
+            "title"   = $TextInfo.ToTitleCase($chartTitle)
+            "yOffset" = 1
+            "xOffset" = 1
+            "seriesSettings" = @{
+                1 = @{ 
+                    "color" = $ColorPalette.Blue[1]
+                    "lineWeight" = 3
+                    "name" = "Frequency"
+                }
+            }
+            "axisSettings" = @{
+                1 = @{
+                    "title" = "$Property ($($meta.units[$Property]))"
+                    "tickLabelSpacing" = 5
+                }
+                2 = @{
+                    "title" = "Frequency"
+                }
+            }
+        } # chartSettings
+    }
 
-    foreach ($prop in $data.$OPivotKey.Keys) {
-        foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
-            if (-Not $data.$OPivotKey.$prop.$IPivotKey.baseline.Histogram) {
+    # Support base/test comparison mode
+    if ($meta.comparison) {
+        $table.cols.$TableTitle.$Property = @{
+            "baseline" = 0
+            "% change" = 1
+            "test"     = 2
+        }
+
+        $table.data.$TableTitle.$Property = @{
+            "baseline" = @{
+                "histogram buckets" = @{}
+            }
+            "% change" = @{
+                "histogram buckets" = @{}
+            }
+            "test" = @{
+                "histogram buckets" = @{}
+            }
+        }
+
+        $table.chartSettings.seriesSettings[1].name = "Baseline"
+        $table.chartSettings.seriesSettings[2] = @{
+            "delete" = $true # don't plot % change
+        }
+        $table.chartSettings.seriesSettings[3] = @{
+            "color"      = $ColorPalette.Orange[1]
+            "name"       = "Test"
+            "lineWeight" = 3
+        }
+
+        $table.meta.columnFormats = @("0.0%", "0.0%", "0.0%")
+    }
+
+    return $table
+} # Get-HistogramTemplate
+
+<#
+.SYNOPSIS
+    Outputs a table with a histogram and chart.
+#>
+function Format-Histogram {
+    param(
+        [Parameter(Mandatory=$true)]
+        [PSObject[]] $DataObj,
+
+        [Parameter(Mandatory=$true)]
+        $OPivotKey,
+
+        [Parameter(Mandatory=$true)]
+        [String] $Tool
+    )
+
+    $tables = @()
+    $meta = $DataObj.meta
+
+    foreach ($prop in $DataObj.data.$OPivotKey.Keys) {
+        foreach ($iPivotKey in $DataObj.data.$OPivotKey.$prop.Keys | sort) {
+            $data = $DataObj.data.$OPivotKey.$prop.$iPivotKey
+
+            if (-not $data.baseline.Histogram) {
                 continue
             }
 
-            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $meta.OuterPivot -OPivotKey $OPivotKey -InnerPivot $meta.InnerPivot -IPivotKey $iPivotKey
+            $table = Get-HistogramTemplate -DataObj $DataObj -TableTitle $tableTitle -Property $prop -IPivotKey $iPivotKey
 
-            if ($IPivotKEy) {
-                $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Histogram - $IPivotKey $innerPivot") 
-            } else {
-                $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Histogram") 
-            }
-
-            $units = $meta.units.$prop
-            $table = @{
-                "rows" = @{
-                    "histogram buckets" = @{}
-                }
-                "cols" = @{
-                    $tableTitle = @{
-                        $prop = 0
-                    }
-                }
-                "meta" = @{
-                    "rightAlign" = [Array] @(2)
-                }
-                "data" = @{
-                    $tableTitle = @{
-                        $prop = @{
-                            "histogram buckets" = @{}
-                        }
-                    }
-                }
-                "chartSettings"= @{
-                    "title"   = $chartTitle
-                    "yOffset" = 1
-                    "xOffset" = 1
-                    "seriesSettings" = @{
-                        1 = @{ 
-                            "color"      = $ColorPalette.Blue[1]
-                            "lineWeight" = 3
-                            "name" = "Sample Count"
-                        }
-                    }
-                    "axisSettings" = @{
-                        1 = @{
-                            "title" = "$prop ($units)"
-                            "tickLabelSpacing" = 5
-                        }
-                        2 = @{
-                            "title" = "Count"
-                        }
-                    }
-                }
-            }
-            
+            $baseSum = ($data.baseline.histogram.Values | measure -Sum).Sum
             if ($meta.comparison) {
-                $table.cols.$tableTitle.$prop = @{
-                    "baseline" = 0
-                    "% change" = 1
-                    "test"     = 2
-                }
-                $table.data.$tableTitle.$prop = @{
-                    "baseline" = @{
-                        "histogram buckets" = @{}
-                    }
-                    "% change" = @{
-                        "histogram buckets" = @{}
-                    }
-                    "test" = @{
-                        "histogram buckets" = @{}
-                    }
-                }
-                $table.chartSettings.seriesSettings[2] = @{
-                    "delete" = $true
-                }
-                $table.chartSettings.seriesSettings[1].name = "Baseline Sample Count"
-                    
-                $table.chartSettings.seriesSettings[3] = @{
-                    "color"      = $ColorPalette.Orange[1]
-                    "name"       = "Test Sample Count"
-                    "lineWeight" = 3
-                }
-                $table.meta.columnFormats = @($null, $meta.format."% change", $null)
-            }
-            $row = 0
-
-            $keys = @()
-            if ($data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.Keys.Count -gt 0) {
-                $keys = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.Keys
-            } else {
-                $keys = $data.$OPivotKey.$prop.$IPivotKey.test.histogram.Keys
+                $testSum = ($data.test.histogram.Values | measure -Sum).Sum
             }
 
             # Add row labels and fill data in table
-            foreach ($bucket in ($keys | Sort)) {
+            $row = 0
+            $buckets = if ($data.baseline.histogram.Keys.Count -gt 0) {$data.baseline.histogram.Keys} else {$data.test.histogram.Keys}
+            foreach ($bucket in ($buckets | sort)) {
                 $table.rows."histogram buckets".$bucket = $row
-                if ($meta.comparison) {
-                    $percentage = $data.$OPivotKey.$prop.$IPivotKey."% change".histogram[$bucket]
-                    $percentage = "$percentage %"
+                $baseVal = $data.baseline.histogram.$bucket / $baseSum
 
-                    $table.data.$tableTitle.$prop.baseline."histogram buckets"[$bucket]   = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.$bucket}
-                    $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = @{"value" = $percentage}
-                    $table.data.$tableTitle.$prop.test."histogram buckets"[$bucket]       = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.histogram.$bucket}
-                    $params = @{
-                        "Cell"    = $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket]
-                        "TestVal" = $data.$OPivotKey.$prop.$IPivotKey.test.histogram[$bucket]
-                        "BaseVal" = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram[$bucket]
-                        "Goal"    = "increase"
-                    }
-                    $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = Set-CellColor @params
-                } 
-                else {
-                    $table.data.$tableTitle.$prop."histogram buckets"[$bucket] = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.histogram.$bucket}
+                if (-not $meta.comparison) {
+                    $table.data.$tableTitle.$prop."histogram buckets"[$bucket] = @{"value" = $baseVal}
+                } else {
+                    $testVal = $data.test.histogram.$bucket / $testSum
+
+                    $baseCell = "C$($row + 4)" # Hardcode for now
+                    $testCell = "E$($row + 4)"
+
+                    $table.data.$tableTitle.$prop.baseline."histogram buckets"[$bucket]   = @{"value" = $baseVal}
+                    $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/$baseCell)"}
+                    $table.data.$tableTitle.$prop.test."histogram buckets"[$bucket]       = @{"value" = $testVal}
+
+                    $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = Set-CellColor -Cell $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] -BaseVal $baseVal -TestVal $testVal -Goal "increase"
                 }
+
                 $row += 1
-            
             }
+
             $table.meta.dataWidth     = Get-TreeWidth $table.cols
             $table.meta.colLabelDepth = Get-TreeDepth $table.cols
             $table.meta.dataHeight    = Get-TreeWidth $table.rows
@@ -1247,14 +1221,13 @@ function Format-Histogram {
             $tables = $tables + $table
         }
     }
+
     if ($table.Count -gt 0) {
-        if ($meta.comparison) {
-            $tables = @($legend) + $tables
-        }
-        $worksheetTitle = Get-WorksheetTitle -BaseName "Histogram" -OuterPivot $outerPivot -OPivotKey $OPivotKey
+        $worksheetTitle = Get-WorksheetTitle -BaseName "Histogram" -OuterPivot $meta.OuterPivot -OPivotKey $OPivotKey
         $tables = @($worksheetTitle) + $tables
     }
-    return $tables  
+
+    return $tables
 }
 
 
@@ -1479,7 +1452,7 @@ function Format-Distribution {
 .PARAMETER Goal
     Defines improvement ("increase" or "decrease")
 #>
-function Set-CellColor ($Cell, $TestVal, $BaseVal, $Goal) {
+function Set-CellColor ($Cell, [Decimal] $TestVal, [Decimal] $BaseVal, $Goal) {
     if ($TestVal -ne $BaseVal) {
         if (($Goal -eq "increase") -eq ($TestVal -gt $BaseVal)) {
             $Cell["fontColor"] = $ColorPalette.Green

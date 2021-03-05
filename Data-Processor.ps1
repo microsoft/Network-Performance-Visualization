@@ -1,5 +1,4 @@
-﻿$Percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98,`
-                                         99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
+﻿$Percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98, 99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
 $NoPivot = ""
 
 ##
@@ -258,41 +257,21 @@ function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey,
 #
 ##
 function Calculate-PercentChange ($DataObj, $Property, $IPivotKey, $OPivotKey) {
-    $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change" = @{}
+    $data = $DataObj.data.$OPivotKey.$Property.$IPivotKey
+    $data."% change" = @{}
+
     foreach ($metricSet in @("stats", "percentiles", "percentilesHist")) {
-        if (-not $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet) {
+        if (-not $data.baseline.$metricSet) {
             continue
         }
 
-        $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change".$metricSet = @{}
-        foreach ($metric in $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet.Keys) {
-            $diff          =  $DataObj.data.$OPivotKey.$Property.$IPivotKey.test.$metricSet.$metric - $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet.$metric
-            if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet.$metric) {
-                $percentChange = 100 * ($diff / [math]::Abs( $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.$metricSet.$metric))
-                $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change".$metricSet.$metric = $percentChange
+        $data."% change".$metricSet = @{}
+
+        foreach ($metric in $data.baseline.$metricSet.Keys) {
+            if ($data.baseline.$metricSet.$metric) {
+                $percentChange = 100 * (($data.test.$metricSet.$metric - $data.baseline.$metricSet.$metric) / [Math]::Abs($data.baseline.$metricSet.$metric))
+                $data."% change".$metricSet.$metric = $percentChange
             }
-                  
-        }
-    }
-
-    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram) {
-        $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change".histogram = @{}
-        $baseTotal = 0
-        $testTotal = 0
-        foreach ($bucket in $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram.Keys) {
-            $baseTotal += $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram.$bucket
-            $testTotal += $DataObj.data.$OPivotKey.$Property.$IPivotKey.test.histogram.$bucket
-        }
-
-        foreach ($bucket in $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram.Keys) {
-            $basePercent = $DataObj.data.$OPivotKey.$Property.$IPivotKey.baseline.histogram.$bucket / $baseTotal
-            $testPercent = $DataObj.data.$OPivotKey.$Property.$IPivotKey.test.histogram.$bucket / $testTotal
-            if ($basePercent -ne 0) {
-                $diff          = $testPercent - $basePercent
-                $percentChange = 100 * ($diff / $basePercent)
-                
-                $DataObj.data.$OPivotKey.$Property.$IPivotKey."% change".histogram.$bucket = $percentChange  
-            }    
         }
     }
 }
