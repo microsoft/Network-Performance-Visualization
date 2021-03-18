@@ -1,5 +1,5 @@
 # Description
-Network-Data-Visualization is a tool used to visualize the data produced by various network performance analysis tools. Currently, the project supports the tools NTTTCP, LATTE, and [ctsTraffic](https://github.com/Microsoft/ctsTraffic).
+Network-Performance-Visualization is a tool used to visualize the data produced by various network performance analysis tools. Currently, the project supports the tools NTTTCP, LATTE, and [ctsTraffic](https://github.com/Microsoft/ctsTraffic).
 
 NTTTCP, LATTE, and ctsTraffic are tools used to measure network performance. These tools are quite capable, but they produce dense raw data files as output, and these files can be difficult to draw meaningful conclusions from. Additionally, network performance tests are often run for multiple iterations in order to mitigate the effects of random variance, and this generates directories full of these dense data files. Compiling the network performance data from a set of tests into a usable report can take a group of engineers several days. This is a huge bottleneck which drastically slows the development and testing cycle for networking developers. This visualizer aims to alleviate this pain point.   
 
