@@ -131,11 +131,11 @@ function New-NetworkVisualization {
 
     Add-ExcelTypes
 
-    # Parse Data 
-    $baselineRaw = Parse-Files -Tool $tool -DirName $BaselineDir
+    # Parse Data
+    $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir
     $testRaw     = $null
     if ($TestDir) {
-        $testRaw = Parse-Files -Tool $tool -DirName $TestDir
+        $testRaw = Get-RawData -Tool $tool -DirName $TestDir
     }
 
     $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot

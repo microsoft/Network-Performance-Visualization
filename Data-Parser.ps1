@@ -1,40 +1,30 @@
-﻿##
-# Parse-Files
-# -----------
-# This function iterates through the files of a specified directory, parsing each file and 
-# exctracting relevant data from each file. Data is then packaged into an array of objects,
-# one object per file, and returned along with some meta data.
-#
-# Parameters
-# ----------
-# DirName (String) - Path to the directory whose files are to be parsed
-# Tool (String) - Name of the tool whose data is being parsed (NTTTCP, LATTE, CTStraffic, etc.)
-#
-# Return
-# ------
-# HashTable - Object containing an array of dataEntry objects and meta data
-#
-##
-function Parse-Files {
+﻿<#
+.SYNOPSIS
+    This function parses each file in the specified directory for
+    the given tool. The data is packaged into an array, one entry
+    per file, along with meta data.
+.PARAMETER DirName
+    Path to the directory with the data files.
+.PARAMETER Tool
+    Name of the tool that generated the data. (NTTTCP, etc.)
+#>
+function Get-RawData {
     param (
-        [Parameter(Mandatory=$true)] [string]$DirName, 
-        [Parameter()] [string] $Tool
+        [Parameter(Mandatory=$true)] [String] $DirName, 
+        [Parameter()] [String] $Tool
     )
 
-    $files = Get-ChildItem $DirName
+    $output = @{}
+    $files = Get-ChildItem -File $DirName
+    if ($files.Count -eq 0) {
+        Write-Error "'$DirName' does not contain any data files."
+    }
 
-    if ($Tool -eq "NTTTCP") {
-        [Array] $dataEntries = @()
-        foreach ($file in $files) {
-            $fileName = $file.FullName
-            $dataEntry = Parse-NTTTCP -FileName $fileName
-            if ($dataEntry) {
-                $dataEntries += ,$dataEntry
-            }
-        }
+    switch ($Tool) {
+        "NTTTCP" {
+            $parseFunc = ${Function:Parse-NTTTCP}
 
-        $rawData = @{
-            "meta" = @{
+            $output."meta" = @{
                 "units" = @{
                     "cycles"     = "cycles/byte"
                     "throughput" = "Gbps"
@@ -50,22 +40,11 @@ function Parse-Files {
                 }
                 "noTable"  = [Array] @("filename", "sessions", "bufferLen", "bufferCount")
             }
-            "data" = $dataEntries
         }
+        "LATTE" {
+            $parseFunc = ${Function:Parse-LATTE}
 
-        return $rawData
-    } 
-    elseif ($Tool -eq "LATTE") {
-        [Array] $dataEntries = @() 
-        foreach ($file in $files) {
-            $fileName = $file.FullName
-            $dataEntry = Parse-LATTE -FileName $fileName
-
-            $dataEntries += ,$dataEntry
-        }
-
-        $rawData = @{
-            "meta" = @{
+            $output."meta" = @{
                 "units" = @{
                     "latency"  = "us"
                 }
@@ -77,25 +56,11 @@ function Parse-Files {
                 }
                 "noTable"  = [Array]@("filename", "sendMethod", "protocol")
             }
-            "data" = $dataEntries
         }
+        "CTStraffic" {
+            $parseFunc = ${Function:Parse-NTTTCP}
 
-        return $rawData
-    }
-    elseif ($Tool -eq "CTStraffic") {
-        [Array] $dataEntries = @() 
-        foreach ($file in $files) {
-            $fileName = $file.FullName
-            $ErrorActionPreference = "Stop"
-            $dataEntry = Parse-CTStraffic -FileName $fileName
-
-            if ($dataEntry) {
-                $dataEntries += ,$dataEntry
-            }
-        }
-
-        $rawData = @{
-            "meta" = @{
+            $output."meta" = @{
                 "units" = @{
                     "throughput" = "Gbps"
                 }
@@ -108,38 +73,31 @@ function Parse-Files {
                 }
                 "noTable"  = [Array]@("filename", "sessions")
             }
-            "data" = [Array]$dataEntries
         }
-
-        return $rawData
     }
+
+    $output."data" = $files | foreach {&$parseFunc -FileName $_.FullName} | where {$_}
+    if ($output."data".Count -eq 0) {
+        Write-Error "Failed to parse any file in '$DirName'."
+    }
+
+    return $output
 }
 
-
-##
-# Parse-NTTTCP
-# ------------
-# This function parses a single file containing NTTTCP data in an XML format. Relevant data
-# is then extracted, packaged into a dataEntry object, and returned.
-#
-# Parameters
-# ----------
-# Filename (String) - Path of file to be parsed
-#
-# Return
-# ------
-# HashTable - Object containing extracted data
-#
-## 
-function Parse-NTTTCP ([string] $FileName) {
-    if ($FileName.Split(".")[-1] -ne "xml"){
+<#
+.SYNOPSIS
+    Parses XML format NTTTCP output.
+.PARAMETER FileName
+    Path of file to be parsed.
+#>
+function Parse-NTTTCP ([String] $FileName) {
+    if ($FileName -notlike "*.xml") {
         return
     }
 
-    [XML]$file = Get-Content $FileName
-
+    $file = (Get-Content $FileName) -as [XML]
     if (-not $file) {
-        Write-Warning "Unable to parse file $FileName"
+        Write-Warning "Skipped '$FileName' because it is not valid XML."
         return
     }
 
