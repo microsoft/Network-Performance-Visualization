@@ -67,7 +67,7 @@ function Create-ExcelFile {
 
     Fit-Cells -Worksheet $worksheetObject
 
-    $null = $workbookObject.SaveAs($savePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook)
+    $null = $workbookObject.SaveAs([System.IO.Path]::GetFullPath($savePath), [Excel.XlFileFormat]::xlOpenXMLWorkbook)
     $workbookObject.Saved = $true
     $null = $workbookObject.Close()
     $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject)
