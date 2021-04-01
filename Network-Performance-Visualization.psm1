@@ -7,6 +7,8 @@ $NTTTCPPivots = @("sessions", "bufferLen", "bufferCount", "none")
 $LATTEPivots = @("protocol", "sendMethod", "none")
 $CTSPivots = @("sessions", "none")
 
+$starttime = (Get-Date)
+
 #
 # Define atrribute that dynamically tab completes pivot params.
 # This is not a form of validation like [ValidateScript()]
@@ -28,6 +30,34 @@ $CTSPivots = @("sessions", "none")
 class PivotArgumentCompleter : ArgumentCompleter {
     PivotArgumentCompleter() : base($Global:PACScript) {
     }
+}
+
+function processing_start {
+    Write-Host "$(get-date): Start"
+}
+
+function processing_time {
+    Write-Host "$(get-date): Progress"
+}
+
+function processing_end {
+    [CmdletBinding()]
+    Param(
+        [parameter(Mandatory=$true)] [String] $Output
+    )
+
+    # Collect statistics
+    # $timestamp = $start | Get-Date -f yyyy.MM.dd_hh.mm.ss
+
+    # Display version and file save location
+
+    Write-Host "$(get-date): End"
+    Write-Host "---------------"
+    $endtime = (Get-Date)
+    $delta   = $endtime - $starttime
+    Write-Host "Time:   $($delta.Minutes) Min $($delta.Seconds) Sec"
+    Write-Host "Report: $OutPut"
+    Write-Host " "
 }
 
 <#
@@ -120,41 +150,50 @@ function New-NetworkVisualization {
         [Int] $SubsampleRate = 50
     )
 
+    processing_start
+
     $ErrorActionPreference = "Stop"
 
     $tool = $PSCmdlet.ParameterSetName
     Confirm-Pivots -Tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot
+    processing_time
 
     # Temporarily replace "none" with empty string to ensure compat.
     $InnerPivot = if ($InnerPivot -eq "none") {""} else {$InnerPivot}
     $OuterPivot = if ($OuterPivot -eq "none") {""} else {$OuterPivot}
 
     Add-ExcelTypes
+    processing_time
 
     # Parse Data
     $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir
+    processing_time
     $testRaw     = $null
     if ($TestDir) {
         $testRaw = Get-RawData -Tool $tool -DirName $TestDir
     }
+    processing_time
 
     $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot
+    processing_time
 
     foreach ($oPivotKey in $processedData.data.Keys) {
         if ($tool -in @("NTTTCP", "CTStraffic")) {
-            $tables += Format-RawData -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-            $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Metrics @("min", "mean", "max", "std dev")
-            $tables += Format-Quartiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
-            $tables += Format-MinMaxChart -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
+            $tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+            $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Metrics @("min", "mean", "max", "std dev")
+            $tables += Format-Quartiles    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
+            $tables += Format-MinMaxChart  -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
         } elseif ($tool -in @("LATTE")) {
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -SubSampleRate $SubsampleRate
-            $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-            $tables += Format-Histogram -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+            $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+            $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
         }
         $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+        processing_time
     }
-    $fileName = Create-ExcelFile -Tables $tables -SavePath $SavePath 
-    Write-Host "Created report at $filename"
+    $filePathAndName = Create-ExcelFile -Tables $tables -SavePath $SavePath 
+    
+    processing_end -OutPut $filePathAndName
 }
 
 <#
