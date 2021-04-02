@@ -12,7 +12,7 @@
 RootModule = 'Network-Performance-Visualization.psm1'
 
 # Version number of this module.
-ModuleVersion = '2021.03.05.6'
+ModuleVersion = '2021.04.01.7'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -27,7 +27,7 @@ Author = 'Luciano Gonzalez'
 CompanyName = 'Microsoft'
 
 # Copyright statement for this module
-Copyright = '(c) 2020 Inc. All rights reserved.'
+Copyright = '(c) 2021 Inc. All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Network-Data-Visualization is a tool used to visualize the data produced by various network performance analysis tools.'

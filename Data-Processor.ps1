@@ -44,9 +44,7 @@ function Process-Data {
         $processedDataObj.rawData.test    = $TestRawData.data
     }
 
-    $meta = $processedDataObj.meta 
-
-    $modes = @("baseline")
+    $modes = if ($TestRawData) { "baseline", "test" } else { ,"baseline" }
     foreach ($prop in ([Array]$BaselineRawData.data)[0].Keys) {
         if ($BaselineRawData.meta.noTable -contains $prop) {
             continue
@@ -58,7 +56,6 @@ function Process-Data {
         }
 
         if ($TestRawData) {
-            $modes += "test"
             foreach ($item in $TestRawData.data) {
                 Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "test"
             }
@@ -68,12 +65,14 @@ function Process-Data {
             foreach ($iPivotKey in $processedDataObj.data.$oPivotKey.$prop.Keys) {
                 foreach ($mode in $modes) {
                     if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.orderedData) {
-                        Calculate-Metrics -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
+                        Add-OrderedDataStats -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                     }
+
                     if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
                         Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                     }
                 }
+
                 if ($TestRawData) {
                     Calculate-PercentChange -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey
                 }
@@ -139,43 +138,65 @@ function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPi
     }
 }
 
+<#
+.SYNOPSIS
+    Calculate metrics from the ordered data of a given data subset,
+    adding them to the data object.
+.PARAMETER DataObj
+    Processed data object.
+.PARAMETER Property
+    Name of the property of the data subset.
+.PARAMETER IPivotKey
+    Inner pivot of the data subset.
+.PARAMETER OPivotKey
+    Outer pivot of the data subset.
+.PARAMETER Mode
+    baseline or test.
+#>
+function Add-OrderedDataStats($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
+    $dataModel = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode
 
-##
-# Calculate-Metrics
-# -----------------
-# This function uses the orderedData field to calculate metrics of a specified data subset.
-#
-# Parameters
-# ----------
-# DataObj (HashTable) - Processed data object
-# Property (String) - Name of the property of the data subset whose metrics are being calculated
-# IPivotKey (String) - Value of the inner pivot of the data subset whose metrics are being calculated
-# OPivotKey (String) - Value of the outer pivot of the data subset whose metrics are being calculated
-# Mode (String) - Mode (baseline/test) of the data subset whose histogram is being used
-#
-# Return
-# ------
-# None
-# 
-##
-function Calculate-Metrics ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
-    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData | Sort
-    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count -gt 0) {
-        $stats = Measure-Stats -arr $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData
-    } 
-    else {
-        $stats = @{}
-    } 
-    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.stats       = $stats
-    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentiles = @{}
+    $dataModel.stats = @{}
+    $dataModel.percentiles = @{}
 
-    if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count -gt 0) {
-        foreach ($percentile in $Percentiles) {
-            $idx   = [int] (($percentile / 100) * ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData.Count - 1))
-            $value = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[$idx]
+    if ($dataModel.orderedData.Count -eq 0) {
+        return
+    }
 
-            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.percentiles.$percentile = $value
-        }
+    $dataModel.orderedData = $dataModel.orderedData | sort
+    $stat = ($dataModel.orderedData | measure -AllStats)
+    $n = $stat.Count
+
+    $dataModel.stats = @{
+        "count"    = $n
+        "sum"      = $stat.Sum
+        "min"      = $stat.Minimum
+        "mean"     = $stat.Average
+        "max"      = $stat.Maximum
+        "median"   = if ($n % 2) {$dataModel.orderedData[[Math]::Floor($n / 2)]} else {0.50 * ($dataModel.orderedData[$n / 2] + $dataModel.orderedData[($n / 2) - 1])}
+        "mode"     = ($dataModel.orderedData | group -NoElement | sort -Property Count)[-1].Name
+        "range"    = $stat.Maximum - $stat.Minimum
+        "std dev"  = $stat.StandardDeviation
+        "variance" = [Math]::Pow($stat.StandardDeviation, 2)
+        "std err"  = $stat.StandardDeviation / [Math]::Sqrt($n)
+    }
+
+    if ($n -gt 3) {
+        $s1 = $n / (($n - 1) * ($n - 2))
+        $k1 = $s1 * (($n + 1) / ($n - 3))
+        $k2 = 3 * ((($n - 1) * ($n - 1)) / (($n - 2) * ($n - 3)))
+
+        $cubeDiffs = $dataModel.orderedData | foreach {[Math]::Pow(($_ - $stat.Average) / $stat.StandardDeviation, 3)}
+        $quadDiffs = $dataModel.orderedData | foreach {[Math]::Pow($_ - $stat.Average, 4)} 
+
+        $dataModel.stats["skewness"] = $s1 * ($cubeDiffs | measure -Sum).Sum
+        $dataModel.stats["kurtosis"] = $k1 * (($quadDiffs | measure -Sum).Sum / [Math]::Pow($stat.StandardDeviation, 4)) - $k2
+    }
+
+    # Fill out percentiles
+    foreach ($percentile in $Percentiles) {
+        $i = [Int](($percentile / 100) * ($dataModel.orderedData.Count - 1))
+        $dataModel.percentiles.$percentile = $dataModel.orderedData[$i]
     }
 }
 
@@ -310,72 +331,4 @@ function Merge-Histograms ($DataObj, $Histogram, $Property, $IPivotKey, $OPivotK
     }
 }
 
-
-##
-# Measure-Stats
-# ---------------
-# Calculates and returns statistical metrics calculated over an array of values
-#
-# Parameters
-# ----------
-# Arr (decimal[]) - Array of values to calculate statistics over
-#
-# Return
-# ------
-# HashTable - Object containing statistical metric calculated over Arr
-#
-## 
-function Measure-Stats ($Arr) {
-    $measures = ($Arr | Measure -Average -Maximum -Minimum -Sum)
-    $stats = @{
-        "count" = $measures.Count
-        "sum"   = $measures.Sum
-        "min"   = $measures.Minimum
-        "mean"  = $measures.Average
-        "max"   = $measures.Maximum
-    }
-    $N   = $measures.Count
-    $Arr = $Arr | Sort
-
-    $squareDiffSum = 0
-    $cubeDiffSum   = 0
-    $quadDiffSum   = 0
-    $curCount      = 0
-    $curVal        = $null
-    $mode          = $null
-    $modeCount     = 0
-
-    foreach ($val in $Arr) {
-        if ($val -ne $curVal) {
-            $curVal   = $val
-            $curCount = 1
-        } 
-        else {
-            $curCount++ 
-        }
-
-        if ($curCount -gt $modeCount) {
-            $mode      = $val
-            $modeCount = $curCount
-        }
-
-        $squareDiffSum += [Math]::Pow(($val - $measures.Average), 2)
-        $quadDiffSum   += [Math]::Pow(($val - $measures.Average), 4)
-    }
-    $stats["median"]   = $Arr[[int]($N / 2)]
-    $stats["mode"]     = $mode
-    $stats["range"]    = $stats["max"] - $stats["min"]
-    $stats["std dev"]  = [Math]::Sqrt(($squareDiffSum / ($N - 1)))
-    $stats["variance"] = $squareDiffSum / ($N - 1)
-    $stats["std err"]  = $stats["std dev"] / [math]::Sqrt($N)
-
-    if ($N -gt 3) {
-        $stats["kurtosis"] = (($N * ($N + 1))/( ($N - 1) * ($N - 2) * ($N - 3))) * ($quadDiffSum / [Math]::Pow($stats["variance"], 2)) - 3 * ([Math]::Pow($N - 1, 2) / (($N - 2) * ($N - 3)) )
-        foreach ($val in $Arr | Sort) { 
-            $cubeDiffSum += [Math]::Pow(($val - $measures.Average) / $stats["std dev"], 3) 
-        }
-        $stats["skewness"] = ($N / (($N - 1) * ($N - 2))) * $cubeDiffSum
-    }
-    return $stats
-}
 

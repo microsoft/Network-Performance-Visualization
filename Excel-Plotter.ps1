@@ -28,6 +28,8 @@ function Create-ExcelFile {
         [string]$SavePath
     )
 
+    Write-Host "Creating Excel workbook..."
+
     $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
 
     # Can be set to true for debugging purposes
