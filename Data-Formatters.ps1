@@ -130,10 +130,9 @@ function Format-RawData {
     }
 
     if ($innerPivot) {
-        $data = Sort-ByProp -Data $data -Prop $innerPivot
+        $data = $data | sort -Property "$innerPivot"
     }
     
-
     foreach ($prop in $dataObj.data.$OPivotKey.Keys) {
         $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
 
@@ -1514,65 +1513,4 @@ function Get-TreeDepth ($Tree) {
         $depths = $depths + [int](Get-TreeDepth -Tree $Tree[$key])
     }
     return ($depths | Measure -Maximum).Maximum + 1
-}
-
-##
-# Sort-ByProp
-# -------------
-# Sorts an array of objects by the value of a specified property in each object
-#
-# Parameters 
-# ----------
-# Data (HashTable[]) - Array of objects
-# Prop (String) - Name of property to sort by
-#
-# Return
-# ------
-# HashTable[] - Array of objects, sorted by property value
-#
-##
-function Sort-ByProp {
-    param(
-        [Parameter()]
-        [PSObject] $Data,
-
-        [Parameter()]
-        [string] $Prop
-    )
-
-    if ($Data.length -eq 1) {
-        $sorted = @()
-        $sorted = $sorted + $Data
-        return $sorted
-    }
-    $arr1 = $Data[0 .. ([int]($Data.length / 2) - 1)]
-    $arr2 = $Data[[int]($Data.length / 2) .. ($Data.length - 1)]
-
-    [array] $arr1 = Sort-ByProp -Data $arr1 -Prop $prop
-    [array] $arr2 = Sort-ByProp -Data $arr2 -Prop $prop
-    $sorted = @()
-    $idx1 = 0
-    $idx2 = 0
-    
-    while ($idx1 -lt $arr1.length -and $idx2 -lt $arr2.length) {
-        if ($arr1[$idx1].$prop -le $arr2[$idx2].$prop) {
-            $sorted  = $sorted + $arr1[$idx1]
-            $idx1   += 1
-        } 
-        else {
-            $sorted  = $sorted + $arr2[$idx2]
-            $idx2   += 1
-        }
-    }
-
-    while ($idx1 -lt $arr1.length) {
-        $sorted  = $sorted + $arr1[$idx1]
-        $idx1   += 1
-    }
-
-    while ($idx2 -lt $arr2.length) {
-        $sorted  = $sorted + $arr2[$idx2]
-        $idx2   += 1
-    }
-    return $sorted
 }
