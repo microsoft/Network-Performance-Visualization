@@ -164,21 +164,24 @@ function Add-OrderedDataStats($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode
     }
 
     $dataModel.orderedData = $dataModel.orderedData | sort
-    $stat = ($dataModel.orderedData | measure -AllStats)
+    $stat = ($dataModel.orderedData | measure -Sum -Average -Maximum -Minimum)
     $n = $stat.Count
+
+    $variance = ($dataModel.orderedData | foreach {[Math]::Pow($_ - $stat.Average, 2)} | measure -Average).Average
+    $stdDev = [Math]::Sqrt($variance)
 
     $dataModel.stats = @{
         "count"    = $n
         "sum"      = $stat.Sum
-        "min"      = $stat.Minimum
         "mean"     = $stat.Average
         "max"      = $stat.Maximum
+        "min"      = $stat.Minimum
         "median"   = if ($n % 2) {$dataModel.orderedData[[Math]::Floor($n / 2)]} else {0.50 * ($dataModel.orderedData[$n / 2] + $dataModel.orderedData[($n / 2) - 1])}
         "mode"     = ($dataModel.orderedData | group -NoElement | sort -Property Count)[-1].Name
         "range"    = $stat.Maximum - $stat.Minimum
-        "std dev"  = $stat.StandardDeviation
-        "variance" = [Math]::Pow($stat.StandardDeviation, 2)
-        "std err"  = $stat.StandardDeviation / [Math]::Sqrt($n)
+        "std dev"  = $stdDev
+        "variance" = $variance
+        "std err"  = $stdDev / [Math]::Sqrt($n)
     }
 
     if ($n -gt 3) {
@@ -186,11 +189,11 @@ function Add-OrderedDataStats($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode
         $k1 = $s1 * (($n + 1) / ($n - 3))
         $k2 = 3 * ((($n - 1) * ($n - 1)) / (($n - 2) * ($n - 3)))
 
-        $cubeDiffs = $dataModel.orderedData | foreach {[Math]::Pow(($_ - $stat.Average) / $stat.StandardDeviation, 3)}
+        $cubeDiffs = $dataModel.orderedData | foreach {[Math]::Pow(($_ - $stat.Average) / $stdDev, 3)}
         $quadDiffs = $dataModel.orderedData | foreach {[Math]::Pow($_ - $stat.Average, 4)} 
 
         $dataModel.stats["skewness"] = $s1 * ($cubeDiffs | measure -Sum).Sum
-        $dataModel.stats["kurtosis"] = $k1 * (($quadDiffs | measure -Sum).Sum / [Math]::Pow($stat.StandardDeviation, 4)) - $k2
+        $dataModel.stats["kurtosis"] = $k1 * (($quadDiffs | measure -Sum).Sum / [Math]::Pow($stdDev, 4)) - $k2
     }
 
     # Fill out percentiles
