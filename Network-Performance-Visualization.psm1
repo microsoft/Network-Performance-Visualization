@@ -1,8 +1,3 @@
-. "$PSScriptRoot.\Data-Parser.ps1"
-. "$PSScriptRoot.\Data-Processor.ps1"
-. "$PSScriptRoot.\Data-Formatters.ps1"
-. "$PSScriptRoot.\Excel-Plotter.ps1"
-
 $NTTTCPPivots = @("sessions", "bufferLen", "bufferCount", "none")
 $LATTEPivots = @("protocol", "sendMethod", "none")
 $CTSPivots = @("sessions", "none")
