@@ -1,5 +1,4 @@
 ﻿$Percentiles = @(0, 1, 5, 10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 95, 96, 97, 98, 99, 99.9, 99.99, 99.999, 99.9999, 99.99999, 100)
-$NoPivot = ""
 
 ##
 # Process-Data
@@ -103,15 +102,8 @@ function Process-Data {
 # None
 #
 function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPivot, $Mode) {
-    $iPivotKey = $NoPivot
-    $oPivotKey = $NoPivot
-
-    if ($InnerPivot) {
-        $iPivotKey = $DataEntry.$InnerPivot 
-    } 
-    if ($OuterPivot) {
-        $oPivotKey = $DataEntry.$OuterPivot    
-    }
+    $iPivotKey = if ($InnerPivot) {$DataEntry.$InnerPivot} else {""}
+    $oPivotKey = if ($OuterPivot) {$DataEntry.$OuterPivot} else {""}
 
     if (-not ($DataObj.data.Keys -contains $oPivotKey)) {
         $DataObj.data.$oPivotKey = @{}

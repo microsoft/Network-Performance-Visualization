@@ -116,14 +116,14 @@ function Format-RawData {
         if ($meta.comparison) {
             $entry.baseline = $true
         } 
-        if (($OPivotKey -eq $NoPivot) -or ($entry.$outerPivot -eq $OPivotKey)) {
+        if ($OPivotKey -in @("", $entry.$outerPivot)) {
             $data += $entry
         }
     }
 
     if ($meta.comparison) {
         foreach ($entry in $DataObj.rawData.test) {
-            if (($OPivotKey -eq $NoPivot) -or ($entry.$outerPivot -eq $OPivotKey)) {
+            if ($OPivotKey -in @("", $entry.$outerPivot)) {
                 $data += $entry
             }
         }
@@ -159,10 +159,7 @@ function Format-RawData {
         $row = 0
 
         foreach ($entry in $data) {
-            $iPivotKey = $NoPivot
-            if ($innerPivot) {
-                $iPivotKey = $entry.$innerPivot
-            }
+            $iPivotKey = if ($innerPivot) {$entry.$innerPivot} else {""}
 
             # Add column labels to table
             if (-not ($table.cols.$tableTitle.$innerPivot.Keys -contains $iPivotKey)) {
