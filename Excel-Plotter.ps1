@@ -22,10 +22,10 @@ $MINCOLUMNWIDTH = 7.0
 function Create-ExcelFile {
     param (
         [Parameter(Mandatory=$true)] 
-        [PSObject[]]$Tables, 
+        [PSObject[]] $Tables, 
 
         [Parameter(Mandatory)]
-        [string]$SavePath
+        [String] $SavePath
     )
 
     Write-Host "Creating Excel workbook..."
@@ -69,7 +69,9 @@ function Create-ExcelFile {
 
     Fit-Cells -Worksheet $worksheetObject
 
-    $null = $workbookObject.SaveAs([System.IO.Path]::GetFullPath($savePath), [Excel.XlFileFormat]::xlOpenXMLWorkbook)
+    $SavePath = [IO.Path]::GetFullPath($SavePath, $PWD) # Convert to absolute path
+
+    $null = $workbookObject.SaveAs($SavePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook)
     $workbookObject.Saved = $true
     $null = $workbookObject.Close()
     $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject)
@@ -79,7 +81,7 @@ function Create-ExcelFile {
     $null = [System.GC]::Collect()
     $null = [System.GC]::WaitForPendingFinalizers()
 
-    return [string]$savePath
+    return $SavePath
 }
 
 
