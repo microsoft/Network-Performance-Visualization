@@ -149,6 +149,11 @@ function New-NetworkVisualization {
 
     $ErrorActionPreference = "Stop"
 
+    # Normalize SavePath
+    $file = Split-Path $SavePath -Leaf
+    $dir = Convert-Path $(Split-Path $SavePath -Parent)
+    $fullPath = Join-Path $dir $file
+
     $tool = $PSCmdlet.ParameterSetName
     Confirm-Pivots -Tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot
     processing_time
@@ -186,9 +191,9 @@ function New-NetworkVisualization {
         $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
         processing_time
     }
-    $filePathAndName = Create-ExcelFile -Tables $tables -SavePath $SavePath 
+    Create-ExcelFile -Tables $tables -SavePath $fullPath 
     
-    processing_end -OutPut $filePathAndName
+    processing_end -OutPut $fullPath
 }
 
 <#

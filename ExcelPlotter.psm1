@@ -69,8 +69,6 @@ function Create-ExcelFile {
 
     Fit-Cells -Worksheet $worksheetObject
 
-    $SavePath = [IO.Path]::GetFullPath($SavePath, $PWD) # Convert to absolute path
-
     $null = $workbookObject.SaveAs($SavePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook)
     $workbookObject.Saved = $true
     $null = $workbookObject.Close()
@@ -80,8 +78,6 @@ function Create-ExcelFile {
     $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObject)
     $null = [System.GC]::Collect()
     $null = [System.GC]::WaitForPendingFinalizers()
-
-    return $SavePath
 }
 
 
