@@ -320,15 +320,17 @@ function Get-TableTitle ($Tool, $OuterPivot, $OPivotKey, $InnerPivot, $IPivotKey
 ##
 function Format-Stats {
     Param (
-        [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
+        [Parameter(Mandatory=$true)]
+        [PSObject[]] $DataObj,
 
-        [Parameter(Mandatory=$true)] $OPivotKey,
+        [Parameter(Mandatory=$true)]
+        $OPivotKey,
 
-        [Parameter()] $Metrics = $null,
+        [Parameter()]
+        [String] $Tool = "",
 
-        [Parameter()] [String] $Tool = "",
-
-        [Parameter()] [switch] $NoNewWorksheets
+        [Parameter()]
+        [Switch] $NoNewWorksheets
     )
     
     $tables = @()
@@ -400,12 +402,8 @@ function Format-Stats {
                 }
             }
 
-            if (-not $Metrics) {
-                $Metrics = ($data.$OPivotKey.$prop.$IPivotKey.baseline.stats.Keys | Sort)
-            }
-
             # Add row labels and fill data in table
-            foreach ($metric in $Metrics) {
+            foreach ($metric in $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.Keys) {
                 if (-not ($table.rows.$prop.Keys -contains $metric)) {
                     $table.rows.$prop.$metric = $row
                     $row += 1

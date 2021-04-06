@@ -180,7 +180,7 @@ function New-NetworkVisualization {
     foreach ($oPivotKey in $processedData.data.Keys) {
         if ($tool -in @("NTTTCP", "CTStraffic")) {
             $tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-            $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Metrics @("min", "mean", "max", "std dev")
+            $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
             $tables += Format-Quartiles    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
             $tables += Format-MinMaxChart  -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
         } elseif ($tool -in @("LATTE")) {

@@ -58,7 +58,7 @@ function Get-RawData {
             }
         }
         "CTStraffic" {
-            $parseFunc = ${Function:Parse-NTTTCP}
+            $parseFunc = ${Function:Parse-CTSTraffic}
 
             $output."meta" = @{
                 "units" = @{

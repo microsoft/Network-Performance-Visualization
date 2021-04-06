@@ -148,8 +148,8 @@ function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPi
 function Add-OrderedDataStats($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode) {
     $dataModel = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode
 
-    $dataModel.stats = @{}
-    $dataModel.percentiles = @{}
+    $dataModel.stats = [Ordered]@{}
+    $dataModel.percentiles = @{} # TODO ordered
 
     if ($dataModel.orderedData.Count -eq 0) {
         return
@@ -162,17 +162,17 @@ function Add-OrderedDataStats($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode
     $variance = ($dataModel.orderedData | foreach {[Math]::Pow($_ - $stat.Average, 2)} | measure -Average).Average
     $stdDev = [Math]::Sqrt($variance)
 
-    $dataModel.stats = @{
-        "count"    = $n
+    $dataModel.stats = [Ordered]@{
+        "n"    = $n
         "sum"      = $stat.Sum
         "mean"     = $stat.Average
-        "max"      = $stat.Maximum
-        "min"      = $stat.Minimum
         "median"   = if ($n % 2) {$dataModel.orderedData[[Math]::Floor($n / 2)]} else {0.50 * ($dataModel.orderedData[$n / 2] + $dataModel.orderedData[($n / 2) - 1])}
         "mode"     = ($dataModel.orderedData | group -NoElement | sort -Property Count)[-1].Name
+        "min"      = $stat.Minimum
+        "max"      = $stat.Maximum
         "range"    = $stat.Maximum - $stat.Minimum
-        "std dev"  = $stdDev
         "variance" = $variance
+        "std dev"  = $stdDev
         "std err"  = $stdDev / [Math]::Sqrt($n)
     }
 
