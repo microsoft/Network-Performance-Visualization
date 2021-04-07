@@ -415,10 +415,7 @@ function Format-Stats {
                 else {
                     $table.data.$tableTitle.$innerPivot.$IPivotKey.baseline.$prop.$metric = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric}
                     $table.data.$tableTitle.$innerPivot.$IPivotKey.test.$prop.$metric     = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.$metric}
-                
-                    $percentChange = $data.$OPivotKey.$prop.$IPivotKey."% change".stats.$metric
-
-                    $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = @{"value" = "$percentChange %"}
+                    $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = @{"value" = $data.$OPivotKey.$prop.$IPivotKey."% change".stats.$metric}
 
                     $params = @{
                         "Cell"    = $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric
@@ -427,14 +424,16 @@ function Format-Stats {
                         "Goal"    = $meta.goal.$prop
                     }
 
-                    # Color % change cell if necessary
-                    if (@("std dev", "variance", "std err", "range") -contains $metric) {
+                    # Certain statistics always have the same goal.
+                    if ($metric -eq "n") {
+                        $params.goal = "increase"
+                    } elseif ($metric -in @("range", "variance", "std dev", "std err")) {
                         $params.goal = "decrease"
-                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Set-CellColor @params
-                    } 
-                    elseif ( -not (@("sum", "count", "kurtosis", "skewness") -contains $metric)) {
-                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Set-CellColor @params
+                    } elseif ($metric -in @("skewness", "kurtosis")) {
+                        $params.goal = "none"
                     }
+
+                    $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Set-CellColor @params
                 }
             }
         }
@@ -984,11 +983,8 @@ function Format-Percentiles {
             foreach ($percentile in $keys | Sort) {
                 $table.rows.percentiles.$percentile = $row
                 if ($meta.comparison) {
-                    $percentage = $data.$OPivotKey.$prop.$IPivotKey."% change".$metricName[$percentile]
-                    $percentage = "$percentage %"
-
                     $table.data.$tableTitle.$prop.baseline.percentiles[$percentile]   = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.$metricName.$percentile}
-                    $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = @{"value" = $percentage}
+                    $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = @{"value" = $data.$OPivotKey.$prop.$IPivotKey."% change".$metricName[$percentile]}
                     $table.data.$tableTitle.$prop.test.percentiles[$percentile]       = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.$metricName.$percentile}
                     $params = @{
                         "Cell"    = $table.data.$tableTitle.$prop."% change".percentiles[$percentile]
@@ -1444,10 +1440,10 @@ function Format-Distribution {
 .PARAMETER BaseVal
     Baseline metric value.
 .PARAMETER Goal
-    Defines improvement ("increase" or "decrease")
+    Defines metric improvement direction. "increase", "decrease", or "none".
 #>
 function Set-CellColor ($Cell, [Decimal] $TestVal, [Decimal] $BaseVal, $Goal) {
-    if ($TestVal -ne $BaseVal) {
+    if (($Goal -ne "none") -and ($TestVal -ne $BaseVal)) {
         if (($Goal -eq "increase") -eq ($TestVal -gt $BaseVal)) {
             $Cell["fontColor"] = $ColorPalette.Green
             $Cell["cellColor"] = $ColorPalette.LightGreen

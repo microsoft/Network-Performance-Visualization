@@ -284,7 +284,9 @@ function Calculate-PercentChange ($DataObj, $Property, $IPivotKey, $OPivotKey) {
         $data."% change".$metricSet = @{}
 
         foreach ($metric in $data.baseline.$metricSet.Keys) {
-            if ($data.baseline.$metricSet.$metric) {
+            if ($data.baseline.$metricSet.$metric -eq 0) {
+                $data."% change".$metricSet.$metric = "--"
+            } else {
                 $percentChange = 100 * (($data.test.$metricSet.$metric - $data.baseline.$metricSet.$metric) / [Math]::Abs($data.baseline.$metricSet.$metric))
                 $data."% change".$metricSet.$metric = $percentChange
             }
