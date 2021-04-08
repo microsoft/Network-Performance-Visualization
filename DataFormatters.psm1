@@ -1,6 +1,9 @@
 ﻿using namespace Microsoft.Office.Interop
 
 $TextInfo = (Get-Culture).TextInfo
+$WorksheetMaxLen = 31
+$HeaderRows = 4
+$EPS = 0.0001
 
 # Excel uses BGR color values
 $ColorPalette = @{
@@ -12,16 +15,29 @@ $ColorPalette = @{
     "Orange"    = @(0x047CCC, 0x19A9FC, 0x5BC6FC)
 }
 
-$EPS = 0.0001
-
-$WorksheetMaxLen = 31
-
 $ABBREVIATIONS = @{
     "sessions" = "sess."
     "bufferLen" = "bufLen."
     "bufferCount" = "bufCt."
     "protocol" = ""
     "sendMethod" = "sndMthd" 
+}
+
+<#
+.SYNOPSIS
+    Converts an index to an Excel column name.
+.NOTES
+    Valid for A to ZZ
+#>
+function Get-ColName($n) {
+    if ($n -ge 26) {
+        $a = [Int][Math]::floor($n / 26)
+        $c1 = [Char]($a + 64)
+    }
+
+    $c2 = [Char](($n % 26) + 65)
+
+    return "$c1$c2"
 }
 
 ##
@@ -338,6 +354,7 @@ function Format-Stats {
     $meta = $DataObj.meta
     $innerPivot = $meta.InnerPivot
     $outerPivot = $meta.OuterPivot
+    $nextRow = $HeaderRows + 1
 
     foreach ($prop in $data.$OPivotKey.keys) {
         $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
@@ -365,7 +382,7 @@ function Format-Stats {
         $row = 0
         $noStats = $false
         foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
-            if (-Not ($data.$OPivotKey.$prop.$IPivotKey.baseline.Keys -contains "stats")) {
+            if ($data.$OPivotKey.$prop.$IPivotKey.baseline.Keys -notcontains "stats") {
                 $noStats = $true
                 break
             }
@@ -386,7 +403,7 @@ function Format-Stats {
                     "test"     = $col + 2
                 }
                 $table.meta.columnFormats += $meta.format.$prop
-                $table.meta.columnFormats += $meta.format."% change"
+                $table.meta.columnFormats += "0.0%"
                 $table.meta.columnFormats += $meta.format.$prop
                 $col += 3
                 $table.data.$tableTitle.$innerPivot.$IPivotKey = @{
@@ -403,19 +420,22 @@ function Format-Stats {
             }
 
             # Add row labels and fill data in table
+            $cellRow = $nextRow
             foreach ($metric in $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.Keys) {
-                if (-not ($table.rows.$prop.Keys -contains $metric)) {
+                if ($table.rows.$prop.Keys -notcontains $metric) {
                     $table.rows.$prop.$metric = $row
                     $row += 1
                 }
 
                 if (-not $meta.comparison) {
                     $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$metric = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric}
-                } 
-                else {
+                } else {
+                    $baseCell = "$(Get-ColName ($col - 1))$cellRow"
+                    $testCell = "$(Get-ColName ($col + 1))$cellRow"
+
                     $table.data.$tableTitle.$innerPivot.$IPivotKey.baseline.$prop.$metric = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric}
+                    $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/ABS($baseCell))"}
                     $table.data.$tableTitle.$innerPivot.$IPivotKey.test.$prop.$metric     = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.$metric}
-                    $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = @{"value" = $data.$OPivotKey.$prop.$IPivotKey."% change".stats.$metric}
 
                     $params = @{
                         "Cell"    = $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric
@@ -435,12 +455,15 @@ function Format-Stats {
 
                     $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Set-CellColor @params
                 }
-            }
+                $cellRow += 1
+            } # foreach $metric
         }
 
         if ($noStats) {
             continue
         }
+
+        $nextRow += $cellRow
 
         $table.meta.dataWidth     = Get-TreeWidth $table.cols
         $table.meta.colLabelDepth = Get-TreeDepth $table.cols
@@ -448,6 +471,7 @@ function Format-Stats {
         $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
         $tables = $tables + $table
     }
+
     if (($tables.Count -gt 0) -and (-not $NoNewWorksheets)) {
         $sheetTitle = Get-WorksheetTitle -BaseName "Stats" -OuterPivot $outerPivot -OPivotKey $OPivotKey
         $tables     = @($sheetTitle) + $tables 
@@ -862,8 +886,8 @@ function Format-Percentiles {
     $meta       = $DataObj.meta
     $innerPivot = $meta.InnerPivot
     $outerPivot = $meta.OuterPivot
+    $nextRow = $HeaderRows
 
-    
     foreach ($prop in $data.$OPivotKey.Keys) {
         foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
             if ($data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles) {
@@ -967,7 +991,7 @@ function Format-Percentiles {
                     "color"      = $ColorPalette.Orange[1]
                     "lineWeight" = 3
                 }
-                $table.meta.columnFormats = @($meta.format.$prop, $meta.format."% change", $meta.format.$prop)
+                $table.meta.columnFormats = @($meta.format.$prop, "0.0%", $meta.format.$prop)
             }
             $row = 0
 
@@ -983,8 +1007,11 @@ function Format-Percentiles {
             foreach ($percentile in $keys | Sort) {
                 $table.rows.percentiles.$percentile = $row
                 if ($meta.comparison) {
+                    $baseCell = "C$nextRow"
+                    $testCell = "E$nextRow"
+
                     $table.data.$tableTitle.$prop.baseline.percentiles[$percentile]   = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.$metricName.$percentile}
-                    $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = @{"value" = $data.$OPivotKey.$prop.$IPivotKey."% change".$metricName[$percentile]}
+                    $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/ABS($baseCell))"}
                     $table.data.$tableTitle.$prop.test.percentiles[$percentile]       = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.$metricName.$percentile}
                     $params = @{
                         "Cell"    = $table.data.$tableTitle.$prop."% change".percentiles[$percentile]
@@ -998,8 +1025,10 @@ function Format-Percentiles {
                     $table.data.$tableTitle.$prop.percentiles[$percentile] = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.$metricName.$percentile}
                 }
                 $row += 1
-            
+                $nextRow += 1
             }
+            $nextRow += $HeaderRows
+
             $table.meta.dataWidth     = Get-TreeWidth $table.cols
             $table.meta.colLabelDepth = Get-TreeDepth $table.cols
             $table.meta.dataHeight    = Get-TreeWidth $table.rows
@@ -1191,11 +1220,11 @@ function Format-Histogram {
                 } else {
                     $testVal = $data.test.histogram.$bucket / $testSum
 
-                    $baseCell = "C$($row + 4)" # Hardcode for now
-                    $testCell = "E$($row + 4)"
+                    $baseCell = "C$($row + $HeaderRows)"
+                    $testCell = "E$($row + $HeaderRows)"
 
                     $table.data.$tableTitle.$prop.baseline."histogram buckets"[$bucket]   = @{"value" = $baseVal}
-                    $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/$baseCell)"}
+                    $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/ABS($baseCell))"}
                     $table.data.$tableTitle.$prop.test."histogram buckets"[$bucket]       = @{"value" = $testVal}
 
                     $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = Set-CellColor -Cell $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] -BaseVal $baseVal -TestVal $testVal -Goal "increase"

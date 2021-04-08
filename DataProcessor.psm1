@@ -71,10 +71,6 @@ function Process-Data {
                         Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                     }
                 }
-
-                if ($TestRawData) {
-                    Calculate-PercentChange -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey
-                }
             }
         }
     }
@@ -253,47 +249,6 @@ function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey,
         }
     }
 }
-
-
-##
-# Calculate-PercentChange
-# -----------------------
-# This function calculates the percent change for all metrics of a given subset of data. 
-#
-# Parameters
-# ----------
-# DataObj (HashTable) - Processed data object
-# Property (String) - Name of the property of the data subset for which % change is being calculated
-# IPivotKey (String) - Value of the inner pivot of the data subset for which % change is being calculated
-# OPivotKey (String) - Value of the outer pivot of the data subset for which % change is being calculated
-#
-# Return 
-# ------
-# None
-#
-##
-function Calculate-PercentChange ($DataObj, $Property, $IPivotKey, $OPivotKey) {
-    $data = $DataObj.data.$OPivotKey.$Property.$IPivotKey
-    $data."% change" = @{}
-
-    foreach ($metricSet in @("stats", "percentiles", "percentilesHist")) {
-        if (-not $data.baseline.$metricSet) {
-            continue
-        }
-
-        $data."% change".$metricSet = @{}
-
-        foreach ($metric in $data.baseline.$metricSet.Keys) {
-            if ($data.baseline.$metricSet.$metric -eq 0) {
-                $data."% change".$metricSet.$metric = "--"
-            } else {
-                $percentChange = 100 * (($data.test.$metricSet.$metric - $data.baseline.$metricSet.$metric) / [Math]::Abs($data.baseline.$metricSet.$metric))
-                $data."% change".$metricSet.$metric = $percentChange
-            }
-        }
-    }
-}
-
 
 ##
 # Merge-Histograms

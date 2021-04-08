@@ -36,7 +36,6 @@ function Get-RawData {
                 "format" = @{
                     "throughput" = "0.00"
                     "cycles"     = "0.00"
-                    "% change"   = "+#.0%;-#.0%;0.0%"
                 }
                 "noTable"  = [Array] @("filename", "sessions", "bufferLen", "bufferCount")
             }
@@ -69,7 +68,6 @@ function Get-RawData {
                 }
                 "format" = @{
                     "throughput" = "0.00"
-                    "% change"   = "+#.0%;-#.0%;0.0%"
                 }
                 "noTable"  = [Array]@("filename", "sessions")
             }
