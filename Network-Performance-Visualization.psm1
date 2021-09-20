@@ -1,6 +1,7 @@
 $NTTTCPPivots = @("sessions", "bufferLen", "bufferCount", "none")
 $LATTEPivots = @("protocol", "sendMethod", "none")
 $CTSPivots = @("sessions", "none")
+$CPSPivots = @("none")
 
 $starttime = (Get-Date)
 
@@ -123,6 +124,9 @@ function New-NetworkVisualization {
         [Parameter(Mandatory=$true, ParameterSetName="CTStraffic")]
         [Switch] $CTStraffic,
 
+        [Parameter(Mandatory=$true, ParameterSetName="CPS")]
+        [Switch] $CPS,
+
         [Parameter(Mandatory=$true)]
         [String] $BaselineDir, 
 
@@ -167,6 +171,7 @@ function New-NetworkVisualization {
 
     # Parse Data
     $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir
+
     processing_time
     $testRaw     = $null
     if ($TestDir) {
@@ -176,6 +181,8 @@ function New-NetworkVisualization {
 
     $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot
     processing_time
+
+
 
     foreach ($oPivotKey in $processedData.data.Keys) {
         if ($tool -in @("NTTTCP", "CTStraffic")) {
@@ -232,6 +239,10 @@ function Confirm-Pivots ($Tool, $InnerPivot, $OuterPivot) {
         }
         "CTSTraffic" {
             $CTSPivots
+            break
+        }
+        "CPS" {
+            $CPSPivots
             break
         }
     }

@@ -72,8 +72,28 @@ function Get-RawData {
                 "noTable"  = [Array]@("filename", "sessions")
             }
         }
-    }
+        "CPS" {
+            $parseFunc = ${Function:Parse-CPS}
 
+            $output."meta" = @{
+                "units" = @{
+                    "conn/s" = ""
+                    "close/s" = "" 
+                    "time" = "s"
+                }
+                "goal" = @{
+                    "conn/s" = "increase"
+                    "close/s" = "increase"    
+                }
+                "format" = @{
+                    "time" = "0.00" 
+                    "conn/s" = "0.0"
+                    "close/s" = "0.0"
+                }
+                "noTable" = [Array]@("time")
+            }
+        }
+    } 
     $output."data" = $files | foreach {&$parseFunc -FileName $_.FullName} | where {$_}
     if ($output."data".Count -eq 0) {
         Write-Error "Failed to parse any file in '$DirName'."
@@ -231,6 +251,30 @@ function Parse-LATTE ([string] $FileName) {
 
     return $dataEntry
 }
+
+function Parse-CPS ([string] $FileName) {
+    $file = Get-Content $FileName
+
+    $dataEntry = @{
+        "filename" = $FileName
+        "periods" = [Array] @()
+    }
+
+    foreach ($line in $file[1..($file.Count - 1)]) {
+        $splitLine = Remove-EmptyStrings -Arr $line.split(' ')
+        
+        $period = @{
+            "time" = [Decimal]($splitLine[0])
+            "conn/s" = [Decimal]($splitLine[5])
+            "close/s" = [Decimal]($splitLine[6])
+        }
+        $dataEntry."periods" += ,$period
+        
+    } 
+    
+    return $dataEntry
+}
+
 
 
 ##
