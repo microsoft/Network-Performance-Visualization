@@ -90,7 +90,7 @@ function Get-RawData {
                     "conn/s" = "0.0"
                     "close/s" = "0.0"
                 }
-                "noTable" = [Array]@("time")
+                "noTable" = [Array]@("filename")
             }
         }
     } 
@@ -257,19 +257,15 @@ function Parse-CPS ([string] $FileName) {
 
     $dataEntry = @{
         "filename" = $FileName
-        "periods" = [Array] @()
+        "conn/s" = [Array] @()
+        "close/s" = [Array] @()
     }
 
     foreach ($line in $file[1..($file.Count - 1)]) {
         $splitLine = Remove-EmptyStrings -Arr $line.split(' ')
-        
-        $period = @{
-            "time" = [Decimal]($splitLine[0])
-            "conn/s" = [Decimal]($splitLine[5])
-            "close/s" = [Decimal]($splitLine[6])
-        }
-        $dataEntry."periods" += ,$period
-        
+         
+        $dataEntry."conn/s" += ,[Decimal]($splitLine[5])
+        $dataEntry."close/s" += ,[Decimal]($splitLine[6]) 
     } 
     
     return $dataEntry

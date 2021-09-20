@@ -115,7 +115,7 @@ function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPi
     }
 
 
-    if ($Item.$Property.GetType().Name -eq "Hashtable") {
+    if ($Item.$Property.GetType().Name -eq "Hashtable") { # $Item.$Property should be $DataEntry.$Property?
         Merge-Histograms -DataObj $DataObj -Histogram $DataEntry.$Property -Property $Property -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $Mode
     } 
     else {
