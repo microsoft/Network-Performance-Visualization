@@ -27,8 +27,7 @@ function Create-ExcelFile {
         [Parameter(Mandatory)]
         [String] $SavePath
     )
-
-    Write-Host "Creating Excel workbook..."
+ 
 
     $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
 
@@ -38,11 +37,20 @@ function Create-ExcelFile {
     $workbookObject = $excelObject.Workbooks.Add()
     $worksheetObject = $workbookObject.Worksheets.Item(1)
 
+    $numIters = [Int]0
+    foreach ($table in $Tables) {
+        if ($table.GetType().Name -eq "Boolean") {continue} # Booleans get unwantedly added to list of tables for some reason
+        if ($table.GetType().Name -eq "string") {continue} 
+        $numIters = $numIters + $table.meta.numWrites
+    }
+    $iter = [ref]0
+
     $rowOffset = 1
     $chartNum  = 1
     $first = $true
     foreach ($table in $Tables) {
-        if ($table.GetType().Name -eq "string") {
+        if ($table.GetType().Name -eq "Boolean") {continue} # Booleans get unwantedly added to list of tables for some reason
+        if ($table.GetType().Name -eq "string") {  
             if ($first) {
                 $first = $false
             } 
@@ -54,21 +62,25 @@ function Create-ExcelFile {
             $chartNum = 1
             $rowOffset = 1
             continue
-        }
-
-        $null = Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) -row $rowOffset
-        $null = Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) -col 1
-        $null = Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset)
-        if ($table.chartSettings) {
+        } 
+        $null = Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) `
+                                -row $rowOffset -iter $iter -numIters $numIters
+        $null = Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) `
+                                -col 1 -iter $iter -numIters $numIters
+        $null = Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows `
+                                -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset) `
+                                -iter $iter -numIters $numIters
+        
+        if ($table.chartSettings) { 
             $null = Create-Chart -Worksheet $worksheetObject -Table $table -StartCol 1 -StartRow $rowOffset -chartNum $chartNum
             $chartNum += 1
-        }
+        } 
         Format-ExcelSheet -Worksheet $worksheetObject -Table $table -RowOffset $rowOffset
         $rowOffset += $table.meta.colLabelDepth + $table.meta.dataHeight + 1
     }
 
     Fit-Cells -Worksheet $worksheetObject
-
+    Write-Progress -Activity "Creating Excel File" -Status "Done" -Id 4 -PercentComplete 100
     $null = $workbookObject.SaveAs($SavePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook)
     $workbookObject.Saved = $true
     $null = $workbookObject.Close()
@@ -201,31 +213,31 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
                 $chart.SeriesCollection($seriesNum).format.fill.ForeColor.TintAndShade = 1
                 $chart.SeriesCollection($seriesNum).format.fill.Transparency = 1
             }
-            if ($Table.chartSettings.seriesSettings.$seriesNum.lineWeight) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("lineWeight")) {
                 $chart.SeriesCollection($seriesNum).format.Line.weight = $Table.chartSettings.seriesSettings.$seriesNum.lineWeight
             }
-            if ($Table.chartSettings.seriesSettings.$seriesNum.markerSize) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("markerSize")) {
                 $chart.SeriesCollection($seriesNum).markerSize = $Table.chartSettings.seriesSettings.$seriesNum.markerSize
             }
-            if ($Table.chartSettings.seriesSettings.$seriesNum.color) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("color")) {
                 $chart.SeriesCollection($seriesNum).Border.Color = $Table.chartSettings.seriesSettings.$seriesNum.color
             }
-            if ($Table.chartSettings.seriesSettings.$seriesNum.name) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("name")) {
                 $chart.SeriesCollection($seriesNum).Name = $Table.chartSettings.seriesSettings.$seriesNum.name
             }
             if ($Table.chartSettings.seriesSettings.$seriesNum.delete) {
                 $chart.SeriesCollection($seriesNum).Delete()
             }
-            if ($Table.chartSettings.seriesSettings.$seriesNum.markerStyle) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("markerStyle")) {
                 $chart.SeriesCollection($seriesNum).MarkerStyle = $Table.chartSettings.seriesSettings.$seriesNum.markerStyle
             }
-            if ($Table.chartSettings.seriesSettings.$seriesNum.markerBackgroundColor) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("markerBackgroundColor")) {
                 $chart.SeriesCollection($seriesNum).MarkerBackgroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerBackgroundColor
             }
-            if ($Table.chartSettings.seriesSettings.$seriesNum.markerForegroundColor) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("markerForegroundColor")) {
                 $chart.SeriesCollection($seriesNum).MarkerForegroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerForegroundColor
             }
-            if ($Table.chartSettings.seriesSettings.$seriesNum.markerColor) {
+            if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("markerColor")) {
                 $chart.SeriesCollection($seriesNum).MarkerBackgroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerColor
                 $chart.SeriesCollection($seriesNum).MarkerForegroundColor = $Table.chartSettings.seriesSettings.$seriesNum.markerColor
             }
@@ -234,19 +246,20 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
 
     if ($Table.chartSettings.axisSettings) {
         foreach($axisNum in $Table.chartSettings.axisSettings.Keys) {
-            if ($Table.chartSettings.axisSettings.$axisNum.min) { 
+            if ($Table.chartSettings.axisSettings.$axisNum.ContainsKey("min")) {  
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MinimumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.min
             }
-            if ($Table.chartSettings.axisSettings.$axisNum.tickLabelSpacing) {
+            if ($Table.chartSettings.axisSettings.$axisNum.ContainsKey("tickLabelSpacing")) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).TickLabelSpacing = $Table.chartSettings.axisSettings.$axisNum.tickLabelSpacing
             }
-            if ($Table.chartSettings.axisSettings.$axisNum.max) { 
+            if ($Table.chartSettings.axisSettings.$axisNum.ContainsKey("max")) { 
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MaximumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.max
+
             }
             if ($Table.chartSettings.axisSettings.$axisNum.logarithmic) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).scaleType = [Excel.XlScaleType]::xlScaleLogarithmic
             }
-            if ($Table.chartSettings.axisSettings.$axisNum.title) {
+            if ($Table.chartSettings.axisSettings.$axisNum.ContainsKey("title")) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).HasTitle = $true
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).AxisTitle.Caption = $Table.chartSettings.axisSettings.$axisNum.title
             }
@@ -290,7 +303,7 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
 # None
 #
 ##
-function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
+function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings, [ref]$iter, $numIters) {
     $Worksheet.Cells.Item($Row, $Col).Borders.LineStyle = [Excel.XlLineStyle]::xlContinuous
     if ($CellSettings.fontColor) {
         $Worksheet.Cells.Item($Row, $Col).Font.Color = $CellSettings.fontColor
@@ -312,6 +325,8 @@ function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings) {
     if ($null -ne $CellSettings.value) {
         $Worksheet.Cells.Item($Row, $Col) = $CellSettings.value
     }
+
+    Write-Progress -Activity "Creating Excel File" -Id 4 -PercentComplete (100 * (($iter.Value++) / $numIters))
 }
 
 ##
@@ -358,18 +373,20 @@ function Merge-Cells ($Worksheet, $Row1, $Col1, $Row2, $Col2) {
 # (int[]) - Tuple of integers capturing the column index range across which the just-drawn label spans
 #
 ##
-function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
+function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row, [ref]$iter, $numIters) {
     $range = @(-1, -1)
     foreach ($label in $Cols.Keys) {
         if ($Cols.$label.GetType().Name -ne "Int32") {
-            $subRange = Fill-ColLabels -Worksheet $Worksheet -Cols $Cols.$label -StartCol $StartCol -Row ($Row + 1)
+            $subRange = Fill-ColLabels -Worksheet $Worksheet -Cols $Cols.$label -StartCol $StartCol -Row ($Row + 1) `
+                                        -iter $iter -numIters $numIters
             $null = Merge-Cells -Worksheet $Worksheet -Row1 $Row -Col1 $subRange[0] -Row2 $Row -Col2 $subRange[1]
             $cellSettings = @{
                 "value" = $label
                 "bold" = $true
                 "center" = $true
             }
-            $null = Fill-Cell -Worksheet $Worksheet -Row $Row -Col $subRange[0] -CellSettings $cellSettings
+            $null = Fill-Cell -Worksheet $Worksheet -Row $Row -Col $subRange[0] -CellSettings $cellSettings -iter $iter `
+                                -numIters $numIters
             if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1)) {
                 $range[0] = $subRange[0]
             } 
@@ -383,13 +400,15 @@ function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
                 "bold" = $true
                 "center" = $true
             }
-            $null = Fill-Cell $Worksheet -Row $Row -Col ($StartCol + $Cols.$label) -CellSettings $cellSettings
+            $null = Fill-Cell $Worksheet -Row $Row -Col ($StartCol + $Cols.$label) -CellSettings $cellSettings -iter $iter `
+                                -numIters $numIters
             if (($StartCol + $Cols.$label -lt $range[0]) -or ($range[0] -eq -1)) {
                 $range[0] = $StartCol + $Cols.$label
             }
             if (($StartCol + $Cols.$label -gt $range[1]) -or ($range[1] -eq -1)) {
                 $range[1] = $StartCol + $Cols.$label
             }
+            
         }    
     }
     return $range
@@ -414,18 +433,20 @@ function Fill-ColLabels ($Worksheet, $Cols, $StartCol, $Row) {
 # (int[]) - Tuple of integers capturing the row index range across which the just-drawn label spans
 #
 ##
-function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
+function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col, [ref]$iter, $numIters) {
     $range = @(-1, -1)
     foreach ($label in $rows.Keys) {
         if ($Rows.$label.GetType().Name -ne "Int32") {
-            $subRange = Fill-RowLabels -Worksheet $Worksheet -Rows $Rows.$label -StartRow $StartRow -Col ($Col + 1)
+            $subRange = Fill-RowLabels -Worksheet $Worksheet -Rows $Rows.$label -StartRow $StartRow -Col ($Col + 1) `
+                            -iter $iter -numIters $numIters
             $null = Merge-Cells -Worksheet $Worksheet -Row1 $subRange[0] -Col1 $Col -Row2 $subRange[1] -Col2 $Col
             $cellSettings = @{
                 "value" = $label
                 "bold" = $true
                 "center" = $true
             }
-            $null = Fill-Cell -Worksheet $Worksheet -Row $subRange[0] -Col $Col -CellSettings $cellSettings
+            $null = Fill-Cell -Worksheet $Worksheet -Row $subRange[0] -Col $Col -CellSettings $cellSettings -iter $iter `
+                        -numIters $numIters
             if (($subRange[0] -lt $range[0]) -or ($range[0] -eq -1)) {
                 $range[0] = $subRange[0]
             } 
@@ -439,7 +460,8 @@ function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
                 "bold" = $true
                 "center" = $true
             }
-            $null = Fill-Cell $Worksheet -Row ($StartRow + $Rows.$label) -Col $Col -CellSettings $cellSettings
+            $null = Fill-Cell $Worksheet -Row ($StartRow + $Rows.$label) -Col $Col -CellSettings $cellSettings -iter $iter `
+                                -numIters $numIters
             if (($StartRow + $Rows.$label -lt $range[0]) -or ($range[0] -eq -1)) {
                 $range[0] = $StartRow + $Rows.$label
             }
@@ -474,17 +496,20 @@ function Fill-RowLabels ($Worksheet, $Rows, $StartRow, $Col) {
 # None
 #
 ## 
-function Fill-Data ($Worksheet, $Data, $Cols, $Rows, $StartCol, $StartRow) {
+function Fill-Data ($Worksheet, $Data, $Cols, $Rows, $StartCol, $StartRow, [ref]$iter, $numIters) { 
     if($Cols.GetType().Name -eq "Int32" -and $Rows.GetType().Name -eq "Int32") {
-        Fill-Cell -Worksheet $Worksheet -Row ($StartRow + $Rows) -Col ($StartCol + $Cols) -CellSettings $Data
+        Fill-Cell -Worksheet $Worksheet -Row ($StartRow + $Rows) -Col ($StartCol + $Cols) -CellSettings $Data -iter $iter `
+                    -numIters $numIters
         return
     }  
     foreach ($label in $Data.Keys) {
         if ($Cols.getType().Name -ne "Int32") {
-            Fill-Data -Worksheet $Worksheet -Data $Data.$label -Cols $Cols.$label -Rows $Rows -StartCol $StartCol -StartRow $StartRow
+            Fill-Data -Worksheet $Worksheet -Data $Data.$label -Cols $Cols.$label -Rows $Rows -StartCol $StartCol `
+                        -StartRow $StartRow -iter $iter -numIters $numIters
         } 
         else {
-            Fill-Data -Worksheet $Worksheet -Data $Data.$label -Cols $Cols -Rows $Rows.$label -StartCol $StartCol -StartRow $StartRow
+            Fill-Data -Worksheet $Worksheet -Data $Data.$label -Cols $Cols -Rows $Rows.$label -StartCol $StartCol `
+                        -StartRow $StartRow -iter $iter -numIters $numIters
         }
     }
 }

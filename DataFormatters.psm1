@@ -73,6 +73,8 @@ function Format-RawData {
             "rowLabelDepth" = 1
             "dataWidth"     = 2
             "dataHeight"    = 3 
+            "name"          = "legend"
+            "numWrites"     = 3 + 3 + 5 
         }
         "rows" = @{
             " "   = 0
@@ -126,6 +128,12 @@ function Format-RawData {
         $tables += $legend
     }
 
+
+    $numBaseline = $DataObj.rawData.baseline.Count
+    $numTest = if ($meta.comparison) {$DataObj.rawData.test.Count} else {0}
+    $numProps = $dataObj.data.$OPivotKey.Keys.Count
+    $numIters = ($numBaseline + $numTest + $meta.outerPivotCount + ($numProps * ($numBaseline + $numTest)))
+    $j = 0
     # Fill single array with all data and sort, label data as baseline/test if necessary
     [Array] $data = @() 
     foreach ($entry in $DataObj.rawData.baseline) {
@@ -135,6 +143,8 @@ function Format-RawData {
         if ($OPivotKey -in @("", $entry.$outerPivot)) {
             $data += $entry
         }
+        
+        Write-Progress -Activity "Formatting Tables" -Status "Raw Data Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
     }
 
     if ($meta.comparison) {
@@ -142,14 +152,15 @@ function Format-RawData {
             if ($OPivotKey -in @("", $entry.$outerPivot)) {
                 $data += $entry
             }
+            Write-Progress -Activity "Formatting Tables" -Status "Raw Data Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
         }
     }
 
     if ($innerPivot) {
-        $data = $data | sort -Property "$innerPivot"
+        $data = Sort-ByProp -Objs $data -Prop $innerPivot -Int $true
     }
     
-    foreach ($prop in $dataObj.data.$OPivotKey.Keys) {
+    foreach ($prop in $dataObj.data.$OPivotKey.Keys) { 
         $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
 
         $table = @{
@@ -164,6 +175,8 @@ function Format-RawData {
             "meta" = @{
                 "columnFormats" = @()
                 "leftAlign"     = [Array] @(2)
+                "name"          = "Raw Data"
+                "numWrites"     = 1 + 2
             }
             "data"  = @{
                 $tableTitle = @{
@@ -185,6 +198,7 @@ function Format-RawData {
                         "test"     = $col + 1
                     }
                     $table.meta.columnFormats += @($meta.format.$prop, $meta.format.$prop)
+                    $table.meta.numWrites += 3
                     $col += 2
                     $table.data.$tableTitle.$innerPivot.$iPivotKey = @{
                         "baseline" = @{
@@ -196,6 +210,7 @@ function Format-RawData {
                     }
                 } 
                 else {
+                    $table.meta.numWrites += 1
                     $table.meta.columnFormats += $meta.format.$prop
                     $table.cols.$tableTitle.$innerPivot.$iPivotKey = $col
                     $table.data.$tableTitle.$innerPivot.$iPivotKey = @{
@@ -211,7 +226,7 @@ function Format-RawData {
                 $filename += "*"
             }
             $table.rows.$prop.$filename = $row
-            
+            $table.meta.numWrites += 1
             $row += 1
             if ($meta.comparison) {
                 if ($entry.baseline) {
@@ -238,12 +253,15 @@ function Format-RawData {
                     "value" = $entry.$prop
                 }
             }
+            Write-Progress -Activity "Formatting Tables" -Status "Raw Data Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
         }
+        $table.meta.numWrites    += $data.Count 
         $table.meta.dataWidth     = Get-TreeWidth $table.cols
         $table.meta.colLabelDepth = Get-TreeDepth $table.cols
         $table.meta.dataHeight    = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-        $tables = $tables + $table
+        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows  
+        $tables = $tables + $table 
+
     }
 
     foreach ($entry in $data) {
@@ -251,10 +269,67 @@ function Format-RawData {
             $entry.Remove("baseline")
         }
     }
+    Write-Progress -Activity "Formatting Tables" -Status "Raw Data Table" -Id 3 -PercentComplete 100 
     return $tables
 }
 
-function Get-WorksheetTitle ($BaseName, $OuterPivot, $OPivotKey, $InnerPivot, $IPivotKey) {
+
+function Sort-ByProp ($Objs, $Prop, $Int) 
+{
+    $arrs = [Array] @()
+
+    foreach ($obj in $Objs) {
+        $arrs += [Array]@($obj)
+    }
+
+    while ($arrs.Count > 1) {
+        $newArr = @()
+        for ($i = 0; $i -lt $arrs.Count - 1; $i += 2) {
+            $merged = Merge-Arrays($arrs[$i], $arrs[$i + 1], $Prop, $Int)
+            $newArr.Add($merged)
+        }
+        $arrs = $newArr
+    }
+    return $arrs
+}
+
+function Merge-Arrays ($Arr1, $Arr2, $Prop, $Int) {
+    $i = 0
+    $j = 0
+    $newArr = @()
+    while (($i -lt $Arr1.Count) -and ($j -lt $Arr2.Count)) {
+        if ($true) {
+            if ([Int]($Arr1[$i].$Prop) -le [Int]($Arr2[$j].$Prop)) {
+                $newArr += $Arr1[$i]
+                $i++
+            } else {
+                $newArr += $Arr2[$j]
+                $j++
+            }
+        } else {
+            if ($Arr1[$i].$Prop -le $Arr2[$j].$Prop) {
+                $newArr += $Arr1[$i]
+                $i++
+            } else {
+                $newArr += $Arr2[$j]
+                $j++
+            }
+        }
+    }
+
+    while ($i -lt $Arr1.Count) {
+        $newArr += $Arr1[$i]
+        $i++
+    }
+    while ($j -lt $arr2.Count) {
+        $newArr += $Arr2[$j]
+        $j++
+    }
+
+    return $newArr
+}
+
+function Get-WorksheetTitle ($BaseName, $OuterPivot, $OPivotKey, $InnerPivot, $IPivotKey, $Prop="") {
     if ($OuterPivot -and $InnerPivot) {
         $OAbv = $ABBREVIATIONS[$OuterPivot]
         $IAbv = $ABBREVIATIONS[$InnerPivot]
@@ -288,6 +363,9 @@ function Get-WorksheetTitle ($BaseName, $OuterPivot, $OPivotKey, $InnerPivot, $I
         return $name 
     }
     else {
+        if ($Prop) { 
+            return "$BaseName $($Prop.Replace("/", " per "))"
+        }
         return "$BaseName"
     }
 }
@@ -355,10 +433,20 @@ function Format-Stats {
     $innerPivot = $meta.InnerPivot
     $outerPivot = $meta.OuterPivot
     $nextRow = $HeaderRows + 1
+ 
+    $numProps = $data.$OPivotKey.keys.Count
+    $propEnum = $data.$OPivotKey.keys.GetEnumerator()
+    $propEnum.MoveNext()
+    $prop = $propEnum.Current 
+    $iKeyEnum = $data.$OPivotKey.$prop.keys.GetEnumerator()
+    $iKeyEnum.MoveNext()
+    $iKey = $iKeyEnum.Current
+    $numMetrics = $data.$OPivotKey.$prop.$iKey.baseline.stats.keys.Count
+    $numIters =  ($numProps * $meta.innerPivotCount * $numMetrics)
+    $j = 0
 
     foreach ($prop in $data.$OPivotKey.keys) {
-        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
-
+        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey 
         $table = @{
             "rows" = @{
                 $prop = @{}
@@ -370,6 +458,8 @@ function Format-Stats {
             }
             "meta" = @{
                 "columnFormats" = @()
+                "name"          = "Stats"  
+                "numWrites"     = 1 + 2
             }
             "data" = @{
                 $tableTitle = @{
@@ -395,6 +485,7 @@ function Format-Stats {
                 }
                 $col += 1
                 $table.meta.columnFormats += $meta.format.$prop
+                $table.meta.numWrites += 1
             } 
             else {
                 $table.cols.$tableTitle.$innerPivot.$IPivotKey = @{
@@ -402,6 +493,7 @@ function Format-Stats {
                     "% Change" = $col + 1
                     "test"     = $col + 2
                 }
+                $table.meta.numWrites += 4
                 $table.meta.columnFormats += $meta.format.$prop
                 $table.meta.columnFormats += "0.0%"
                 $table.meta.columnFormats += $meta.format.$prop
@@ -425,6 +517,7 @@ function Format-Stats {
                 if ($table.rows.$prop.Keys -notcontains $metric) {
                     $table.rows.$prop.$metric = $row
                     $row += 1
+                    $table.meta.numWrites += 1
                 }
 
                 if (-not $meta.comparison) {
@@ -454,6 +547,8 @@ function Format-Stats {
                     }
 
                     $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = Set-CellColor @params
+                    Write-Progress -Activity "Formatting Tables" -Status "Stats Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
+
                 }
                 $cellRow += 1
             } # foreach $metric
@@ -468,15 +563,16 @@ function Format-Stats {
         $table.meta.dataWidth     = Get-TreeWidth $table.cols
         $table.meta.colLabelDepth = Get-TreeDepth $table.cols
         $table.meta.dataHeight    = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows 
+        $table.meta.numWrites    += $table.meta.dataHeight * $table.meta.dataWidth 
         $tables = $tables + $table
     }
 
     if (($tables.Count -gt 0) -and (-not $NoNewWorksheets)) {
-        $sheetTitle = Get-WorksheetTitle -BaseName "Stats" -OuterPivot $outerPivot -OPivotKey $OPivotKey
-        $tables     = @($sheetTitle) + $tables 
+        $sheetTitle = Get-WorksheetTitle -BaseName "Stats" -OuterPivot $outerPivot -OPivotKey $OPivotKey 
+        $tables     = [Array]@($sheetTitle) + $tables 
     }
-
+    Write-Progress -Activity "Formatting Tables" -Status "Stats Table" -Id 3 -PercentComplete 100 
     return $tables
 }
 
@@ -513,6 +609,11 @@ function Format-Quartiles {
     $innerPivot = $meta.InnerPivot
     $outerPivot = $meta.OuterPivot
 
+
+    $numProps = $data.$OPivotKey.keys.Count  
+    $numIters =  ($numProps * $meta.innerPivotCount)
+    $j = 0
+
     foreach ($prop in $data.$OPivotKey.Keys) { 
         $format = $meta.format.$prop
         $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
@@ -535,6 +636,8 @@ function Format-Quartiles {
             "meta" = @{
                 "columnFormats" = @($format, $format, $format, $format, $format )
                 "dataWidth" = 5
+                "name" = "Quartiles"
+                "numWrites" = 2 + 6
             }
             "data" = @{
                 $tableTitle = @{
@@ -594,6 +697,7 @@ function Format-Quartiles {
         $row = 0
         foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
             if (-not $meta.comparison) {
+                $table.meta.numWrites += 1
                 $table.rows.$prop.$innerPivot.$IPivotKey = $row
                 $row += 1
                 $table.data.$TableTitle.min.$prop.$innerPivot.$IPivotKey = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
@@ -603,11 +707,13 @@ function Format-Quartiles {
                 $table.data.$TableTitle.Q4.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.max - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] }
             } 
             else {
+                $table.meta.numWrites += 3
                 $table.rows.$prop.$innerPivot.$IPivotKey = @{
                     "baseline" = $row
                     "test"     = $row + 1
                 }
                 $row += 2
+
                 $table.data.$TableTitle.min.$prop.$innerPivot.$IPivotKey = @{
                     "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
                     "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.min}
@@ -629,12 +735,15 @@ function Format-Quartiles {
                     "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.max - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[75] }
                 }
             }
+            Write-Progress -Activity "Formatting Tables" -Status "Quartiles Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
+
         }
 
         $table.meta.dataWidth     = Get-TreeWidth $table.cols
         $table.meta.colLabelDepth = Get-TreeDepth $table.cols
         $table.meta.dataHeight    = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows 
+        $table.meta.numWrites    += $table.meta.dataHeight * $table.meta.dataWidth 
         $tables = $tables + $table
     }
 
@@ -642,6 +751,8 @@ function Format-Quartiles {
         $sheetTitle = Get-WorksheetTitle -BaseName "Quartiles" -OuterPivot $outerPivot -OPivotKey $OPivotKey
         $tables = @($sheetTitle) + $tables
     }
+    Write-Progress -Activity "Formatting Tables" -Status "Quartiles Table" -Id 3 -PercentComplete 100
+
 
     return $tables
 }
@@ -680,7 +791,11 @@ function Format-MinMaxChart {
     $meta       = $DataObj.meta
     $innerPivot = $meta.InnerPivot
     $outerPivot = $meta.OuterPivot
+    $metrics = @("min", "mean", "max")
 
+    $numProps = $data.$OPivotKey.keys.Count  
+    $numIters =  ($numProps * $meta.innerPivotCount * $metrics.Count)
+    $j = 0
     foreach ($prop in $data.$OPivotKey.keys) {
         $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop) 
         $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
@@ -695,6 +810,8 @@ function Format-MinMaxChart {
             }
             "meta" = @{
                 "columnFormats" = @()
+                "name"          = "MinMaxCharts"
+                "numWrites"     = 1 + 2
             }
             "data" = @{
                 $tableTitle = @{
@@ -801,6 +918,7 @@ function Format-MinMaxChart {
         foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
             # Add column labels to table
             $table.cols.$tableTitle.$innerPivot.$IPivotKey = $col
+            $table.meta.numWrites += 1
             $table.data.$tableTitle.$innerPivot.$IPivotKey = @{
                 $prop = @{}
             }
@@ -808,13 +926,15 @@ function Format-MinMaxChart {
             $col += 1
         
             # Add row labels and fill data in table
-            foreach ($metric in @("min", "mean", "max")) {
+            foreach ($metric in $metrics) {
                 if (-not ($table.rows.$prop.Keys -contains $metric)) { 
                     if (-not $meta.comparison) {
                         $table.rows.$prop.$metric = $row
                         $row += 1
+                        $table.meta.numWrites += 1
                     } 
                     else {
+                        $table.meta.numWrites += 3
                         $table.rows.$prop.$metric = @{
                             "baseline" = $row
                             "test"     = $row + 1
@@ -833,6 +953,8 @@ function Format-MinMaxChart {
                     $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$metric.baseline = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.$metric}
                     $table.data.$tableTitle.$innerPivot.$IPivotKey.$prop.$metric.test     = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.$metric}
                 }
+                Write-Progress -Activity "Formatting Tables" -Status "MinMeanMax Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
+
             }
 
         }
@@ -840,6 +962,7 @@ function Format-MinMaxChart {
         $table.meta.colLabelDepth = Get-TreeDepth $table.cols
         $table.meta.dataHeight    = Get-TreeWidth $table.rows
         $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+        $table.meta.numWrites    += $table.meta.dataHeight * $table.meta.dataWidth 
         $tables = $tables + $table
     }
 
@@ -847,6 +970,7 @@ function Format-MinMaxChart {
         $sheetTitle = Get-WorksheetTitle -BaseName "MinMeanMax" -OuterPivot $outerPivot -OPivotKey $OPivotKey
         $tables = @($sheetTitle) + $tables
     }
+    Write-Progress -Activity "Formatting Tables" -Status "MinMeanMax Table" -Id 3 -PercentComplete 100
 
     return $tables
 }
@@ -887,6 +1011,19 @@ function Format-Percentiles {
     $innerPivot = $meta.InnerPivot
     $outerPivot = $meta.OuterPivot
     $nextRow = $HeaderRows
+  
+    $propEnum = $data.$OPivotKey.keys.GetEnumerator()
+    $propEnum.MoveNext()
+    $prop = $propEnum.Current 
+    $iKeyEnum = $data.$OPivotKey.$prop.keys.GetEnumerator()
+    $iKeyEnum.MoveNext()
+    $iKey = $iKeyEnum.Current 
+    $keyCount = ($data.$OPivotKey.$prop.$iKey.baseline.percentiles.keys.Count, `
+                $data.$OPivotKey.$prop.$iKey.baseline.percentilesHist.keys.Count, 1 | Measure-Object -Maximum).Maximum  
+    $numProps = $dataObj.data.$OPivotKey.Keys.Count
+    $numIters = $numProps * $meta.innerPivotCount * $keyCount
+    $j = 0
+
 
     foreach ($prop in $data.$OPivotKey.Keys) {
         foreach ($IPivotKey in $data.$OPivotKey.$prop.Keys | Sort) {
@@ -933,6 +1070,8 @@ function Format-Percentiles {
                 "meta" = @{
                     "columnFormats" = @($meta.format.$prop)
                     "rightAlign"    = [Array] @(2)
+                    "name"          = "Percentiles"
+                    "numWrites"     = 1 + 2
                 }
                 "data" = @{
                     $tableTitle = @{
@@ -954,7 +1093,7 @@ function Format-Percentiles {
                     }
                     "axisSettings" = @{
                         1 = @{
-                            #"max"            = 100
+                            "max"            = 100
                             "title"          = "Percentiles"
                             "minorGridlines" = $true
                         }
@@ -968,6 +1107,7 @@ function Format-Percentiles {
             $table.chartSettings.axisSettings[2].logarithmic = Set-Logarithmic -Data $data -OPivotKey $OPivotKey -Prop $prop -IPivotKey $IPivotKey -Meta $meta 
 
             if ($meta.comparison) {
+                $table.meta.numWrites += 3
                 $table.cols.$tableTitle.$prop = @{
                     "baseline" = 0
                     "% change" = 1
@@ -1006,6 +1146,7 @@ function Format-Percentiles {
             # Add row labels and fill data in table
             foreach ($percentile in $keys | Sort) {
                 $table.rows.percentiles.$percentile = $row
+                $table.meta.numWrites += 1
                 if ($meta.comparison) {
                     $baseCell = "C$nextRow"
                     $testCell = "E$nextRow"
@@ -1026,13 +1167,16 @@ function Format-Percentiles {
                 }
                 $row += 1
                 $nextRow += 1
+                Write-Progress -Activity "Formatting Tables" -Status "Percentiles Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
+
             }
             $nextRow += $HeaderRows
 
             $table.meta.dataWidth     = Get-TreeWidth $table.cols
             $table.meta.colLabelDepth = Get-TreeDepth $table.cols
             $table.meta.dataHeight    = Get-TreeWidth $table.rows
-            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows 
+            $table.meta.numWrites    += $table.meta.dataHeight * $table.meta.dataWidth  
             $tables = $tables + $table
         }
     }
@@ -1041,6 +1185,7 @@ function Format-Percentiles {
         $sheetTitle = Get-WorksheetTitle -BaseName "Percentiles" -OuterPivot $outerPivot -OPivotKey $OPivotKey
         $tables     = @($sheetTitle) + $tables 
     }
+    Write-Progress -Activity "Formatting Tables" -Status "Done" -Id 3 -PercentComplete 100
 
     return $tables  
 }
@@ -1106,6 +1251,8 @@ function Get-HistogramTemplate {
         "meta" = @{
             "rightAlign" = [Array] @(2)
             "columnFormats" = @("0.0%")
+            "name"          = "Histogram"
+            "numWrites"     = 1 + 2
         }
         "data" = @{
             $TableTitle = @{
@@ -1144,7 +1291,8 @@ function Get-HistogramTemplate {
             "% change" = 1
             "test"     = 2
         }
-
+        
+        $table.meta.numWrites += 3
         $table.data.$TableTitle.$Property = @{
             "baseline" = @{
                 "histogram buckets" = @{}
@@ -1197,6 +1345,7 @@ function Format-Histogram {
             $data = $DataObj.data.$OPivotKey.$prop.$iPivotKey
 
             if (-not $data.baseline.Histogram) {
+                Write-Host $data.baseline.keys
                 continue
             }
 
@@ -1213,6 +1362,7 @@ function Format-Histogram {
             $buckets = if ($data.baseline.histogram.Keys.Count -gt 0) {$data.baseline.histogram.Keys} else {$data.test.histogram.Keys}
             foreach ($bucket in ($buckets | sort)) {
                 $table.rows."histogram buckets".$bucket = $row
+                $table.meta.numWrites += 1
                 $baseVal = $data.baseline.histogram.$bucket / $baseSum
 
                 if (-not $meta.comparison) {
@@ -1237,6 +1387,8 @@ function Format-Histogram {
             $table.meta.colLabelDepth = Get-TreeDepth $table.cols
             $table.meta.dataHeight    = Get-TreeWidth $table.rows
             $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+            
+            $table.meta.numWrites += $table.meta.dataHeight * $table.meta.dataWidth  
             $tables = $tables + $table
         }
     }
@@ -1276,34 +1428,45 @@ function Format-Distribution {
 
         [Parameter()] [String] $Tool = "",
 
-        [Parameter()] [String] $Prop = "latency",
+        [Parameter()] [String] $Prop,
 
-        [Parameter()] [String] $NumSamples = 10000,
-    
-        [Parameter()] [Int] $SubSampleRate = 50,
+        [Parameter()] [Int] $SubSampleRate = -1,
 
         [Parameter()] [switch] $NoNewWorksheets
         
     )
 
+    $DEFALT_SEGMENTS_TARGET = 200
+
     $meta  = $DataObj.meta 
-    $modes = @("baseline")
-    if ($meta.comparison) {
-        $modes += "test"
-    }
+    $modes = if ($meta.comparison) { @("baseline", "test") } else { @(,"baseline") } 
     $tables     = @()
     $innerPivot = $meta.InnerPivot
     $outerPivot = $meta.OuterPivot
 
-    foreach ($IPivotKey in $DataObj.data.$OPivotKey.$Prop.Keys) {
+    $NumSamples = Calculate-MaxNumSamples -RawData $DataObj.rawData -Modes $modes -Prop $Prop
+    if ($SubSampleRate -eq -1) {
+        $SubSampleRate = [Int] ($NumSamples/$DEFALT_SEGMENTS_TARGET)
+    } 
+    $numIters = Calculate-NumIterations -Distribution -DataObj $dataObj -Prop $Prop -SubSampleRate $SubSampleRate
+    $j = 0
+
+    foreach ($IPivotKey in $DataObj.data.$OPivotKey.$Prop.Keys) { 
         foreach ($mode in $modes) { 
             if (-Not $DataObj.data.$OPivotKey.$Prop.$IPivotKey.$mode.stats) {
                 continue
-            }
+            } 
+
+            
+            $logarithmic = Set-Logarithmic -Data $dataObj.data -OPivotKey $OPivotKey -Prop $Prop -IPivotKey $IPivotKey `
+                                            -Meta $meta
             $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
-            $data       = $dataObj.rawData.$mode
+            $data       = $dataObj.rawData.$mode 
             $table = @{
-                "meta" = @{}
+                "meta" = @{
+                    "name" = "Distribution"
+                    "numWrites" = 1 + 3
+                }
                 "rows" = @{
                     "Data Point" = @{}
                 }
@@ -1318,7 +1481,7 @@ function Format-Distribution {
                         "Time Segment" = @{
                             "Data Point" = @{}
                         }
-                        "latency" = @{
+                        $Prop = @{
                             "Data Point" = @{}
                         }
                     }
@@ -1327,17 +1490,17 @@ function Format-Distribution {
                     "chartType" = [Excel.XlChartType]::xlXYScatter
                     "yOffset"   = 2
                     "xOffset"   = 2
-                    "title"     = "Temporal Latency Distribution"
+                    "title"     = "Temporal $prop Distribution"
                     "axisSettings" = @{
                         1 = @{
                             "title"          = "Time Series"
-                            "max"            = $NumSamples
                             "minorGridlines" = $true
                             "majorGridlines" = $true
+                            "max"            = $NumSamples
                         }
                         2 = @{
-                            "title"       = "us"
-                            "logarithmic" = $true
+                            "title"       = $meta.units.$Prop
+                            "logarithmic" = $logarithmic
                             "min"         = 10
                         }
                     }
@@ -1350,7 +1513,7 @@ function Format-Distribution {
                             "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                             "markerBackgroundColor" = $ColorPalette.Blue[2]
                             "markerForegroundColor" = $ColorPalette.Blue[1]
-                            "name"                  = "$prop Sample" 
+                            "name"                  = "$Prop Sample" 
                         }
                 }
             } else {
@@ -1359,7 +1522,7 @@ function Format-Distribution {
                             "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                             "markerBackgroundColor" = $ColorPalette.Orange[2]
                             "markerForegroundColor" = $ColorPalette.Orange[1]
-                            "name"                  = "$prop Sample"
+                            "name"                  = "$Prop Sample"
                         }
                 }
             }
@@ -1367,16 +1530,23 @@ function Format-Distribution {
             # Add row labels and fill data in table
             $i   = 0
             $row = 0
-            if ($SubSampleRate -gt 0) {
-                $NumSegments = $NumSamples / $SubSampleRate
-                while ($i -lt $NumSegments) {
+
+            if ($SubSampleRate -gt 0) { 
+                $finished = $false
+                while (-Not $finished) {
                     [Array]$segmentData = @()
                     foreach ($entry in $data) {
-                        if ($entry.$prop.GetType().Name -ne "Object[]") {
+                        if ($entry.$Prop.GetType().Name -ne "Object[]") {
                             continue
                         }
-                        if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey))) {
-                            $segmentData += $entry[$Prop][($i * $SubSampleRate) .. ((($i + 1) * $SubSampleRate) - 1)]
+                        if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and `
+                                ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey)) -and `
+                                    ($i * $SubSampleRate -lt $entry.$Prop.Count)) {
+                            $finalIdx = (($i + 1) * $SubSampleRate) - 1
+                            if (((($i + 1) * $SubSampleRate) - 1) -ge $entry.$Prop.Count) {
+                                $finalIdx = $entry.$Prop.Count - 1
+                            }
+                            $segmentData += $entry.$Prop[($i * $SubSampleRate) .. $finalIdx]
                         }
                     }
                     $segmentData = $segmentData | Sort
@@ -1398,64 +1568,138 @@ function Format-Distribution {
                         $table.data.$tableTitle.$Prop."Data Point".($row + 3) = @{"value" = $segmentData[[int]((3 * $segmentData.Count) / 4)]}
                         $table.data.$tableTitle.$Prop."Data Point".($row + 4) = @{"value" = $segmentData[-1]}
                         $row += 5
+                        $table.meta.numWrites += 5
                     } 
-                    else {
+                    elseif ($segmentData.Count -ge 1){
                         foreach ($sample in $segmentData) {
                             $table.rows."Data Point".$row = $row
                             $table.data.$tableTitle."Time Segment"."Data Point".$row = @{"value" = $time}
                             $table.data.$tableTitle.$Prop."Data Point".$row          = @{"value" = $sample}
                             $row++
+                            $table.meta.numWrites += 1
                         }
+                    } else {
+                        $finished = $true
                     }
                     $i++
+
+                    Write-Progress -Activity "Formatting Tables" -Status "Distribution Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
+
                 }
             } else {
-                while ($i -lt $NumSamples) {
+                $finished = $false
+                while (-not $finished) { 
                     [Array]$segmentData = @()
                     foreach ($entry in $data) {
                         if ($entry.$prop.GetType().Name -ne "Object[]") {
                             continue
                         }
                         if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey))) {
+                            if ($null -eq $entry[$Prop][$i]) {
+                                continue
+                            } 
                             $segmentData += $entry[$Prop][$i]
                         }
                     }
-
+                    
+                    $finished = ($segmentData.Count -eq 0) 
                     foreach ($sample in $segmentData) {
                         $table.rows."Data Point".$row = $row
                         $table.data.$tableTitle."Time Segment"."Data Point".$row = @{"value" = $i}
                         $table.data.$tableTitle.$Prop."Data Point".$row          = @{"value" = $sample}
                         $row++
+                        $table.meta.numWrites += 1
                     }
                     $i++
+                    Write-Progress -Activity "Formatting Tables" -Status "Distribution Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
+
                 }
             }
             $table.meta.dataWidth     = Get-TreeWidth $table.cols
             $table.meta.colLabelDepth = Get-TreeDepth $table.cols
             $table.meta.dataHeight    = Get-TreeWidth $table.rows
             $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
-
+            $table.meta.numWrites += $table.meta.dataHeight * $table.meta.dataWidth 
             if (-not $NoNewWorksheets) {
                 if ($modes.Count -gt 1) {
                     if ($mode -eq "baseline") {
-                        $worksheetName = Get-WorksheetTitle -BaseName "Base Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                        $worksheetName = Get-WorksheetTitle -BaseName "Base Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey -Prop $Prop
                     } 
                     else {
-                        $worksheetName = Get-WorksheetTitle -BaseName "Test Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                        $worksheetName = Get-WorksheetTitle -BaseName "Test Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey -Prop $Prop
                     } 
                 } 
                 else {
-                    $worksheetName = Get-WorksheetTitle -BaseName "Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
-                }
-                
+                    $worksheetName = Get-WorksheetTitle -BaseName "Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey -Prop $Prop
+                } 
                 $tables += $worksheetName
             }
 
             $tables += $table
         }
     }
+    
+    Write-Progress -Activity "Formatting Tables" -Status "Distribution Table" -Id 3 -PercentComplete 100
+
     return $tables
 }
+
+
+<#
+.SYNOPSIS 
+    Calculates the maximum numer of samples of a given property provided
+    by a single data file
+#>
+function Calculate-MaxNumSamples ($RawData, $Modes, $Prop) {
+    $max = 0
+    foreach ($mode in $Modes) {
+        foreach ($fileEntry in $RawData.$mode) {
+            if ($fileEntry.$Prop.Count -gt $max) {
+                $max = $fileEntry.$Prop.Count
+            }
+        } 
+    }
+    $max
+}
+function Calculate-NumIterations {
+    param (
+        [Parameter(Mandatory=$true, ParameterSetName="distribution")]
+        [Switch] $Distribution,
+
+        [Parameter(Mandatory=$true)]
+        $DataObj, 
+
+        [Parameter(Mandatory=$true, ParameterSetName = "distribution")]
+        [String] $Prop, 
+
+        [Parameter(Mandatory=$true, ParameterSetName = "distribution")]
+        [Int] $SubSampleRate
+
+         
+    )
+
+    if ($Distribution) { 
+        $innerLoopIters = 0
+        $maxSamples = Calculate-MaxNumSamples -RawData $DataObj.rawData -Modes @("baseline") -Prop $Prop
+        if ($SubsampleRate -gt 0) { 
+            $innerLoopIters += 1 + [Int]( ($maxSamples / $SubsampleRate) + 0.5) 
+        } else {
+            $innerLoopIters += $maxSamples
+        }
+
+        
+        if ($dataObj.meta.comparison) {
+            $maxSamples = Calculate-MaxNumSamples -RawData $DataObj.rawData -Modes @("test") -Prop $Prop
+            if ($SubsampleRate -gt 0) {  
+                $innerLoopIters += 1 + [Int](($maxSamples/ $SubSampleRate) + 0.5) 
+            } else {
+                $innerLoopIters += $maxSamples + 1
+            }
+        } 
+        return $DataObj.meta.innerPivotCount * $innerLoopIters
+    }
+}
+
 
 <#
 .SYNOPSIS

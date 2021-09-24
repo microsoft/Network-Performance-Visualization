@@ -3,7 +3,7 @@ $LATTEPivots = @("protocol", "sendMethod", "none")
 $CTSPivots = @("sessions", "none")
 $CPSPivots = @("none")
 
-$starttime = (Get-Date)
+
 
 #
 # Define atrribute that dynamically tab completes pivot params.
@@ -27,33 +27,26 @@ class PivotArgumentCompleter : ArgumentCompleter {
     PivotArgumentCompleter() : base($Global:PACScript) {
     }
 }
-
-function processing_start {
-    Write-Host "$(get-date): Start"
-}
-
-function processing_time {
-    Write-Host "$(get-date): Progress"
-}
-
+ 
 function processing_end {
     [CmdletBinding()]
     Param(
-        [parameter(Mandatory=$true)] [String] $Output
+        [Parameter(Mandatory=$true)] [String] $Output,
+        [Parameter()] $Starttime 
     )
 
     # Collect statistics
     # $timestamp = $start | Get-Date -f yyyy.MM.dd_hh.mm.ss
 
     # Display version and file save location
-
-    Write-Host "$(get-date): End"
-    Write-Host "---------------"
+    
     $endtime = (Get-Date)
-    $delta   = $endtime - $starttime
-    Write-Host "Time:   $($delta.Minutes) Min $($delta.Seconds) Sec"
+    $delta   = $endtime - $Starttime
+    Clear-Host
+    Write-Host "$(get-date): xcvEnd"
+    Write-Host "---------------`nTime:   $($delta.Minutes) Min $($delta.Seconds) Sec"  
     Write-Host "Report: $OutPut"
-    Write-Host " "
+    Write-Host " " 
 }
 
 <#
@@ -146,11 +139,11 @@ function New-NetworkVisualization {
         [String] $SavePath,
 
         [Parameter(Mandatory=$false, ParameterSetName = "LATTE")]
-        [Int] $SubsampleRate = 50
+        [Parameter(Mandatory=$false, ParameterSetName = "CPS")]
+        [Int] $SubsampleRate = -1
     )
-
-    processing_start
-
+    $starttime = (Get-Date)
+    Clear-Host 
     $ErrorActionPreference = "Stop"
 
     # Normalize SavePath
@@ -159,48 +152,62 @@ function New-NetworkVisualization {
     $fullPath = Join-Path $dir $file
 
     $tool = $PSCmdlet.ParameterSetName
-    Confirm-Pivots -Tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot
-    processing_time
+    Confirm-Pivots -Tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot 
 
     # Temporarily replace "none" with empty string to ensure compat.
     $InnerPivot = if ($InnerPivot -eq "none") {""} else {$InnerPivot}
     $OuterPivot = if ($OuterPivot -eq "none") {""} else {$OuterPivot}
 
-    Add-ExcelTypes
-    processing_time
+    Add-ExcelTypes 
 
     # Parse Data
-    $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir
-
-    processing_time
+    $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir -InnerPivot $InnerPivot -OuterPivot $OuterPivot
+  
     $testRaw     = $null
     if ($TestDir) {
-        $testRaw = Get-RawData -Tool $tool -DirName $TestDir
-    }
-    processing_time
-
+        $testRaw = Get-RawData -Tool $tool -DirName $TestDir -Mode "Test" -InnerPivot $InnerPivot -OuterPivot $OuterPivot
+    } 
     $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot
-    processing_time
+ 
 
 
-
+    $tables = @()
     foreach ($oPivotKey in $processedData.data.Keys) {
         if ($tool -in @("NTTTCP", "CTStraffic")) {
-            $tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-            $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+            $tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
+            $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
             $tables += Format-Quartiles    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
             $tables += Format-MinMaxChart  -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
         } elseif ($tool -in @("LATTE")) {
-            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -SubSampleRate $SubsampleRate
+            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
             $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+        } elseif ($tool -in @("CPS")) {
+            $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "conn/s" -SubSampleRate $SubsampleRate
+            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "close/s" -SubSampleRate $SubsampleRate
+            $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
         }
         $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-        processing_time
-    }
-    Create-ExcelFile -Tables $tables -SavePath $fullPath 
+         
+    } 
+
     
-    processing_end -OutPut $fullPath
+    Create-ExcelFile -Tables $tables -SavePath $fullPath 
+    for ($i = 0; $i -lt 4; $i++) 
+    {
+        if ( (-not $processedData.meta.comparison) -and ($i -eq 1)) {
+            continue
+        }
+        Write-Progress -Activity "Processing" -Id $i -Completed
+    } 
+    $endtime = (Get-Date)
+    $delta   = $endtime - $starttime 
+
+    # Powershell wont print more than two lines here
+    Write-Host "Time: $($delta.Minutes) Min $($delta.Seconds) Sec"   
+    Write-Host "Report: $fullPath `n`n" 
+    #processing_end -OutPut $fullPath -Starttime $starttime 
 }
 
 <#

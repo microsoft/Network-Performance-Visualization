@@ -44,6 +44,15 @@ function Process-Data {
     }
 
     $modes = if ($TestRawData) { "baseline", "test" } else { ,"baseline" }
+
+
+    $numProps = ([Array]$BaselineRawData.data)[0].Keys.Count
+    $baselineDataCount = $BaselineRawData.data.Count
+    $testDataCount = if ($TestRawData) {$TestRawData.data.Count} else {0}
+    $totalIters = $numProps * ($baselineDataCount + $testDataCount + `
+                    ($processedDataObj.meta.innerPivotCount * $processedDataObj.meta.outerPivotC * $modes.Count))
+
+    $i = 0
     foreach ($prop in ([Array]$BaselineRawData.data)[0].Keys) {
         if ($BaselineRawData.meta.noTable -contains $prop) {
             continue
@@ -52,11 +61,13 @@ function Process-Data {
         # Extract property values from dataEntry objects and place values in the correct spot within the processedData object
         foreach($item in $BaselineRawData.data) {
             Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "baseline"
+            Write-Progress -Activity "Processing Raw Data..." -Status "Processing..." -Id 2 -PercentComplete (100 * (($i++) / $totalIters))
         }
 
         if ($TestRawData) {
             foreach ($item in $TestRawData.data) {
                 Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "test"
+                Write-Progress -Activity "Processing Raw Data..." -Status "Processing..." -Id 2 -PercentComplete (100 * (($i++) / $totalIters))
             }
         }
 
@@ -69,13 +80,41 @@ function Process-Data {
 
                     if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
                         Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
+                    } else {
+                        Histogram-FromOrderedData -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                     }
+
+                    Write-Progress -Activity "Processing Raw Data..." -Status "Processing..." -Id 2 -PercentComplete (100 * (($i++) / $totalIters))
                 }
             }
         }
     }
+    Write-Progress -Activity "Processing Raw Data..." -Status "Done"-Id 2 -PercentComplete 100
     return $processedDataObj
 }
+
+function Histogram-FromOrderedData ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode, $NumBuckets = 5) {
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram = @{}
+    $min = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[0]
+    $max = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[-1]
+    $bucketSize = ($max - $min) / $NumBuckets
+    $curBucket = $min
+    foreach ($value in $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData) { 
+        if ($value -le $curBucket + $bucketSize) {
+            if (-Not $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.ContainsKey($curBucket)) {
+                $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$curBucket] = 0
+            }
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$curBucket]++
+        } else {
+            while ($value -gt ($curBucket + $bucketSize)) { 
+                $curBucket += $bucketSize
+                $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$curBucket] = 0
+            }
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$curBucket]++
+        } 
+    }
+}
+
 
 
 ##
