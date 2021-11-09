@@ -27,33 +27,38 @@ function Process-Data {
         [Parameter()] [String] $OuterPivot
     )
 
+    $meta = $BaselineRawData.meta
+    if ($TestRawData) {
+        $meta = Merge-MetaData -BaselineMeta $BaselineRawData.meta -TestMeta $TestRawData.meta
+    }
+
     $processedDataObj = @{
-        "meta"    = $BaselineRawData.meta
+        "meta"    = $meta
         "data"    = @{}
         "rawData" = @{
             "baseline" = $BaselineRawData.data
         }
     }
 
-    $processedDataObj.meta.InnerPivot = $InnerPivot
-    $processedDataObj.meta.OuterPivot = $OuterPivot
+    $processedDataObj.meta.innerPivot = $InnerPivot
+    $processedDataObj.meta.outerPivot = $OuterPivot
 
-    if ($TestRawData) {
-        $processedDataObj.meta.comparison = $true
-        $processedDataObj.rawData.test    = $TestRawData.data
+    if ($processedDataObj.meta) { 
+        $processedDataObj.rawData.test = $TestRawData.data
+        
     }
 
     $modes = if ($TestRawData) { "baseline", "test" } else { ,"baseline" }
 
 
-    $numProps = ([Array]$BaselineRawData.data)[0].Keys.Count
+    $numProps = $processedDataObj.meta.props.Count
     $baselineDataCount = $BaselineRawData.data.Count
     $testDataCount = if ($TestRawData) {$TestRawData.data.Count} else {0}
     $totalIters = $numProps * ($baselineDataCount + $testDataCount + `
-                    ($processedDataObj.meta.innerPivotCount * $processedDataObj.meta.outerPivotC * $modes.Count))
+                    ($processedDataObj.meta.innerPivotKeys.Count * $processedDataObj.meta.outerPivotKeys.Count * $modes.Count))
 
     $i = 0
-    foreach ($prop in ([Array]$BaselineRawData.data)[0].Keys) {
+    foreach ($prop in $processedDataObj.meta.props) {
         if ($BaselineRawData.meta.noTable -contains $prop) {
             continue
         }
@@ -64,12 +69,13 @@ function Process-Data {
             Write-Progress -Activity "Processing Raw Data..." -Status "Processing..." -Id 2 -PercentComplete (100 * (($i++) / $totalIters))
         }
 
-        if ($TestRawData) {
+        if ($meta.comparison){
             foreach ($item in $TestRawData.data) {
                 Place-DataEntry -DataObj $processedDataObj -DataEntry $item -Property $prop -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Mode "test"
                 Write-Progress -Activity "Processing Raw Data..." -Status "Processing..." -Id 2 -PercentComplete (100 * (($i++) / $totalIters))
             }
         }
+
 
         foreach ($oPivotKey in $processedDataObj.data.Keys) {
             foreach ($iPivotKey in $processedDataObj.data.$oPivotKey.$prop.Keys) {
@@ -77,10 +83,16 @@ function Process-Data {
                     if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.orderedData) {
                         Add-OrderedDataStats -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                     }
+                }
 
-                    if ($processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
+                foreach ($mode in $modes) {
+                    if (-not $processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.percentiles -and `
+                            $processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
                         Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
-                    } else {
+                    } 
+                    
+                    if (-not $processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram -and `
+                            $processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.orderedData ) {
                         Histogram-FromOrderedData -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
                     }
 
@@ -93,25 +105,73 @@ function Process-Data {
     return $processedDataObj
 }
 
+function Merge-MetaData ($BaselineMeta, $TestMeta) {
+    $BaselineMeta.comparison = $true
+    foreach ($innerPivotKey in $TestMeta.innerPivotKeys) {
+        if (-Not $BaselineMeta.innerPivotKeys -Contains $innerPivotKey) {
+            $BaselineMeta.innerPivotKeys += $innerPivotKey
+        }
+    }
+
+    foreach ($outerPivotKey in $TestMeta.outerPivotKeys) {
+        if (-Not $BaselineMeta.outerPivotKeys -Contains $outerPivotKey) {
+            $BaselineMeta.outerPivotKeys += $outerPivotKey
+        }
+    }
+    return $BaselineMeta
+}
+function Invert-Mode($Mode) {
+    if ($Mode -eq "baseline") {
+        return "test"
+    } else {
+        return "baseline"
+    }
+}
+
 function Histogram-FromOrderedData ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode, $NumBuckets = 5) {
     $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram = @{}
-    $min = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[0]
-    $max = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[-1]
-    $bucketSize = ($max - $min) / $NumBuckets
-    $curBucket = $min
-    foreach ($value in $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData) { 
-        if ($value -le $curBucket + $bucketSize) {
-            if (-Not $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram.ContainsKey($curBucket)) {
-                $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$curBucket] = 0
+
+    
+    $otherMode = Invert-Mode($Mode)
+    $buckets = [Array] @()
+    if (-not $DataObj.data.$OPivotKey.$Property.$IPivotKey.$otherMode.histogram) {
+        
+        $min = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[0] 
+        $max = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData[-1]
+
+        if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.$otherMode.orderedData) {
+
+            if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.test.orderedData[0] -lt $min) {
+                $min = $DataObj.data.$OPivotKey.$Property.$IPivotKey.test.orderedData[0]
             }
-            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$curBucket]++
-        } else {
-            while ($value -gt ($curBucket + $bucketSize)) { 
-                $curBucket += $bucketSize
-                $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$curBucket] = 0
+
+            if ($DataObj.data.$OPivotKey.$Property.$IPivotKey.test.orderedData[-1] -gt $max) {
+                $max = $DataObj.data.$OPivotKey.$Property.$IPivotKey.test.orderedData[-1]
             }
-            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$curBucket]++
-        } 
+        }
+
+        $bucketSize = ($max - $min) / $NumBuckets
+        $curBucket = $min
+        $buckets = [Array]@()
+
+
+        for($i = 0; $i -lt $NumBuckets; $i++) { 
+            $buckets += $curBucket
+            $curBucket += $bucketSize
+        }
+    } 
+    else {
+        $buckets = $DataObj.data.$OPivotKey.$Property.$IPivotKey.$otherMode.histogram.Keys | Sort-Object
+    }
+
+    $bucketIdx = 0
+    $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$buckets[$bucketIdx]] = 0
+    foreach ($value in $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.orderedData) {  
+        while ($bucketIdx -lt ($buckets.Count - 1) -and $value -ge $buckets[$bucketIdx + 1]) {   
+            $bucketIdx++ 
+            $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$buckets[$bucketIdx]] = 0 
+        }
+        $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram[$buckets[$bucketIdx]]++ 
     }
 }
 
@@ -154,11 +214,11 @@ function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPi
     }
 
 
-    if ($Item.$Property.GetType().Name -eq "Hashtable") { # $Item.$Property should be $DataEntry.$Property?
+    if ($DataEntry.ContainsKey($Property) -and $DataEntry.$Property.GetType().Name -eq "Hashtable") { # $Item.$Property should be $DataEntry.$Property?
         Merge-Histograms -DataObj $DataObj -Histogram $DataEntry.$Property -Property $Property -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $Mode
     } 
-    else {
-        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.Keys -contains "orderedData")) {
+    elseif ($DataEntry.ContainsKey($Property)){
+        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData)) {
             $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
         }
         $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $DataEntry.$Property
@@ -266,7 +326,7 @@ function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey,
         $cdf.$bucket = 100 * ($cdf.$bucket / $sumSoFar)
     }
     
-    $dataModel.percentilesHist = @{}
+    $dataModel.percentiles = @{}
 
     $prevBucket = $null
     $bucket = $buckets.Dequeue()
@@ -278,13 +338,13 @@ function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey,
         }
 
         if ($null -eq $prevBucket) {
-            $dataModel.percentilesHist.$percentile = $bucket
+            $dataModel.percentiles.$percentile = $bucket
         } else {
             # Approx. the desired percentile via linear interpolation
             $interp = ($percentile - $cdf.$prevBucket) / ($cdf.$bucket - $cdf.$prevBucket)
             $approxPercentile = ($interp * $bucket) + ((1 - $interp) * $prevBucket)
 
-            $dataModel.percentilesHist.$percentile = $approxPercentile
+            $dataModel.percentiles.$percentile = $approxPercentile
         }
     }
 }

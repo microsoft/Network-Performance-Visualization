@@ -34,6 +34,10 @@ function Get-RawData {
             $parseFunc = ${Function:Parse-NTTTCP}
 
             $output."meta" = @{
+                "props" = [Array] @(
+                    "throughput",
+                    "cycles"
+                )
                 "units" = @{
                     "cycles"     = "cycles/byte"
                     "throughput" = "Gbps"
@@ -53,6 +57,9 @@ function Get-RawData {
             $parseFunc = ${Function:Parse-LATTE}
 
             $output."meta" = @{
+                "props" = [Array] @(
+                    "latency"
+                )
                 "units" = @{
                     "latency"  = "us"
                 }
@@ -69,6 +76,9 @@ function Get-RawData {
             $parseFunc = ${Function:Parse-CTSTraffic}
 
             $output."meta" = @{
+                "props" = [Array] @(
+                    "throughput"
+                )
                 "units" = @{
                     "throughput" = "Gbps"
                 }
@@ -85,17 +95,19 @@ function Get-RawData {
             $parseFunc = ${Function:Parse-CPS}
 
             $output."meta" = @{
+                "props" = [Array] @(
+                    "conn/s",
+                    "close/s"
+                )
                 "units" = @{
                     "conn/s" = ""
-                    "close/s" = "" 
-                    "time" = "s"
+                    "close/s" = ""  
                 }
                 "goal" = @{
                     "conn/s" = "increase"
                     "close/s" = "increase"    
                 }
-                "format" = @{
-                    "time" = "0.00" 
+                "format" = @{ 
                     "conn/s" = "0.0"
                     "close/s" = "0.0"
                 }
@@ -104,26 +116,60 @@ function Get-RawData {
         }
     } 
 
+    $PathCosts = @{}
     $InnerPivotKeys = @{}
-    $OuterPivotKeys = @{} 
+    $OuterPivotKeys = @{}
 
     $id = if ($Mode -eq "Baseline") {0} else {1}
     $output.data = [Array]@()
+    $addedPathCosts = $false
     for($i = 0; $i -lt $files.Count; $i++) { 
         Write-Progress -Activity "Parsing $($Mode) Data Files..." -Status "Parsing..." -Id $id -PercentComplete (100 * (($i) / $files.Count))
-        $output.data += , (& $parseFunc -FileName $files[$i].FullName -InnerPivotKeys $InnerPivotKeys `
-                            -OuterPivotKeys $OuterPivotKeys -InnerPivot $InnerPivot -OuterPivot $OuterPivot) 
+        $output.data += , (& $parseFunc -FileName $files[$i].FullName -InnerPivot $InnerPivot -OuterPivot $OuterPivot `
+                            -InnerPivotKeys $InnerPivotKeys  -OuterPivotKeys $OuterPivotKeys -PathCosts $PathCosts) 
+        if (($PathCosts.Count -gt 0) -and (-not $addedPathCosts)) {
+            $output.data = $output.data[0..($output.Count - 1)]
+            $addedPathCosts = $true 
+        }
     }
+
+    if ($Tool -in @("CTStraffic", "NTTTCP")) {
+        if ($PathCosts.Count -gt 0) {
+            # This can be expanded to include the other metrics captured by the pathcosts tool
+            Incorporate-PathCosts -Data $output.data -PathCosts $PathCosts 
+            $output.meta.props += "cycles/byte"
+            $output.meta.goal["cycles/byte"] = "decrease"
+            $output.meta.format["cycles/byte"] = "0.00"
+        }
+        
+    }
+
     Write-Progress -Activity "Parsing $($Mode) Data Files..." -Status "Done" -Id $id -PercentComplete 100
  
     if ($output."data".Count -eq 0) {
         Write-Error "Failed to parse any file in '$DirName'."
     }
 
-    $output.meta.innerPivotCount = $InnerPivotKeys.Keys.Count
-    $output.meta.outerPivotCount = $OuterPivotKeys.Keys.Count
+    $output.meta.innerPivotKeys = $InnerPivotKeys.Keys 
+    $output.meta.outerPivotKeys = $OuterPivotKeys.Keys 
 
     return $output
+}
+
+
+function Incorporate-PathCosts ($Data, $PathCosts) {
+    foreach ($entry in $Data) {
+        $file = $entry.filename.Split("\")[-1]
+        if ($PathCosts.ContainsKey($file)) {
+            # There is a bug in Get-VswitchPathCost where sometimes throughput counters return 0
+            # and CPB calculation leads to a very large number.
+            # This is to skip those outlier cases. 
+            if ($PathCosts[$file]["Byte path cost (cycles/byte)"] -gt 1000) {
+                continue
+            }
+            $entry["cycles/byte"] = $PathCosts[$file]["Byte path cost (cycles/byte)"]
+        }
+    }
 }
 
 
@@ -141,7 +187,12 @@ function Get-RawData {
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-NTTTCP ([String] $FileName, $InnerPivotKeys, $OuterPivotKeys, $InnerPivot, $OuterPivot) {
+function Parse-NTTTCP ([String] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+    if ($Filename -match "pathcost") {
+        Extract-PathCosts -Filename $Filename -PathCosts $PathCosts 
+        return
+    }
+    
     if ($FileName -notlike "*.xml") {
         return
     }
@@ -177,6 +228,18 @@ function Parse-NTTTCP ([String] $FileName, $InnerPivotKeys, $OuterPivotKeys, $In
 }
 
 
+function Extract-PathCosts ($Filename, $PathCosts) {
+    (Get-Content -Path $Filename | ConvertFrom-Json).psobject.properties | Foreach {
+        $key = $_.Name     
+        $values = @{}
+        ($_.Value).psobject.properties | Foreach {
+            $values[$_.Name] = [Decimal]$_.Value 
+        }
+        $PathCosts[$key] = $values
+    }
+}
+ 
+
 <#
 .SYNOPSIS
     Parses CTSTraffic output.
@@ -195,19 +258,35 @@ function Parse-NTTTCP ([String] $FileName, $InnerPivotKeys, $OuterPivotKeys, $In
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-CTStraffic ( [String] $Filename, $InnerPivotKeys, $OuterPivotKeys, $InnerPivot, $OuterPivot) {
+function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+
+    if ($Filename -match "pathcost") {
+        Extract-PathCosts -Filename $Filename -PathCosts $PathCosts 
+        return
+    }
 
     $data = (Get-Content $Filename) -replace '^"|"$','' | ConvertFrom-Csv
+
+
 
     if (-not ($data | Get-Member -Name "In-Flight" -ErrorAction "SilentlyContinue")) {
         Write-Warning "Skipped '$Filename' because it's not a valid ctsTraffic status log. Please verify that it was generated by the -StatusFilename option."
         return
     }
 
-    $bytesToGigabits = 8 / (1000 * 1000 * 1000)
+    $bytesToGigabits = [Decimal] 8 / (1000 * 1000 * 1000)
 
-    $throughput = ($data.SendBps | measure -Average).Average * $bytesToGigabits
-    $maxSessions = ($data."In-Flight" | measure -Max).Max
+    $throughput = [Array]@()
+    $warmupPadding = 2
+    $cooldownPadding = 2
+
+    for ($i = $warmupPadding; $i -lt $data.Count - $cooldownPadding; $i += 1) { 
+
+        $tputVal = ($data[$i].SendBps, $data[$i].RecvBps | Measure-Object -Maximum).Maximum
+        $throughput += [Decimal] $tputVal * $bytesToGigabits
+    }  #($data.SendBps | measure -Average).Average * $bytesToGigabits
+
+    $maxSessions = ($data."In-Flight" | measure -Max).Maximum
 
     $dataEntry = @{
         "sessions"   = $maxSessions
@@ -243,7 +322,13 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivotKeys, $OuterPivotKeys
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-LATTE ([string] $FileName, $InnerPivotKeys, $OuterPivotKeys, $InnerPivot, $OuterPivot) {
+function Parse-LATTE ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+
+    if ($Filename -match "pathcost") {
+        Extract-PathCost -Filename $Filename -PathCosts $PathCosts 
+        return
+    }
+
     $file = Get-Content $FileName
 
     $dataEntry = @{
@@ -275,7 +360,7 @@ function Parse-LATTE ([string] $FileName, $InnerPivotKeys, $OuterPivotKeys, $Inn
             }
 
             if ($histogram) {
-                $dataEntry.latency.([Int32]$splitLine[0]) = [Int32] $splitLine[-1]
+                $dataEntry.latency[[Int32]$splitLine[0]] = [Int32] $splitLine[-1]
             }
         }
 
@@ -328,7 +413,12 @@ function Parse-LATTE ([string] $FileName, $InnerPivotKeys, $OuterPivotKeys, $Inn
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-CPS ([string] $FileName, $InnerPivotKeys, $OuterPivotKeys, $InnerPivot, $OuterPivot) {
+function Parse-CPS ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+    if ($Filename -match "pathcost") {
+        Extract-PathCost -Filename $Filename -PathCosts $PathCosts 
+        return
+    }
+
     $file = Get-Content $FileName
 
     $dataEntry = @{

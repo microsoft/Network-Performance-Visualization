@@ -174,13 +174,14 @@ function New-NetworkVisualization {
     $tables = @()
     foreach ($oPivotKey in $processedData.data.Keys) {
         if ($tool -in @("NTTTCP", "CTStraffic")) {
-            $tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
+            #$tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
             $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
             $tables += Format-Quartiles    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
             $tables += Format-MinMaxChart  -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
         } elseif ($tool -in @("LATTE")) {
-            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
             $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
+            
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
         } elseif ($tool -in @("CPS")) {
             $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
@@ -191,7 +192,7 @@ function New-NetworkVisualization {
         $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
          
     } 
-
+    
     
     Create-ExcelFile -Tables $tables -SavePath $fullPath 
     for ($i = 0; $i -lt 4; $i++) 
