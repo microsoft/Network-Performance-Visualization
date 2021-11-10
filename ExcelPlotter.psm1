@@ -220,6 +220,7 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
                 $chart.SeriesCollection($seriesNum).markerSize = $Table.chartSettings.seriesSettings.$seriesNum.markerSize
             }
             if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("color")) {
+                $chart.SeriesCollection($seriesNum).Interior.Color = $Table.chartSettings.seriesSettings.$seriesNum.color
                 $chart.SeriesCollection($seriesNum).Border.Color = $Table.chartSettings.seriesSettings.$seriesNum.color
             }
             if ($Table.chartSettings.seriesSettings.$seriesNum.ContainsKey("name")) {
