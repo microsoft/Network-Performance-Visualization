@@ -32,7 +32,7 @@ function Create-ExcelFile {
     $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
 
     # Can be set to true for debugging purposes
-    $excelObject.Visible = $false
+    $excelObject.Visible = $true
 
     $workbookObject = $excelObject.Workbooks.Add()
     $worksheetObject = $workbookObject.Worksheets.Item(1)
@@ -255,7 +255,6 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
             }
             if ($Table.chartSettings.axisSettings.$axisNum.ContainsKey("max")) { 
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MaximumScale = [decimal] $Table.chartSettings.axisSettings.$axisNum.max
-
             }
             if ($Table.chartSettings.axisSettings.$axisNum.logarithmic) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).scaleType = [Excel.XlScaleType]::xlScaleLogarithmic
@@ -267,8 +266,14 @@ function Create-Chart ($Worksheet, $Table, $StartRow, $StartCol, $ChartNum) {
             if ($Table.chartSettings.axisSettings.$axisNum.minorGridlines) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).HasMinorGridlines = $true
             }
+            if ($Table.chartSettings.axisSettings.$axisNum.minorGridlinesColor) {
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MinorGridlines.Border.color = $Table.chartSettings.axisSettings.$axisNum.minorGridlinesColor
+            }
             if ($Table.chartSettings.axisSettings.$axisNum.majorGridlines) {
                 $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).HasMajorGridlines = $true
+            }
+            if ($Table.chartSettings.axisSettings.$axisNum.majorGridlinesColor) {
+                $Worksheet.chartobjects($ChartNum).chart.Axes($axisNum).MajorGridlines.Border.color = $Table.chartSettings.axisSettings.$axisNum.minorGridlinesColor
             }
         }
     }
@@ -324,7 +329,8 @@ function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings, [ref]$iter, $numIters
     }
 
     if ($null -ne $CellSettings.value) {
-        $Worksheet.Cells.Item($Row, $Col) = $CellSettings.value
+        $cellValue = $CellSettings.value -Replace "<.*>", ""
+        $Worksheet.Cells.Item($Row, $Col) = $cellvalue
     }
 
     Write-Progress -Activity "Creating Excel File" -Id 4 -PercentComplete (100 * (($iter.Value++) / $numIters))

@@ -11,8 +11,9 @@ $ColorPalette = @{
     "Green"      = 0x135C1E
     "LightRed"   = 0x9EA1FF
     "Red"        = 0x202A80
-    "Blue"      = @(0x9C6527, 0xD68546, 0xFFB894)
-    "Orange"    = @(0x047CCC, 0x19A9FC, 0x5BC6FC)
+    "Blue"      = @(0x633f16, 0x9C6527, 0xD68546, 0xFFB894) # Dark -> Light
+    "Orange"    = @(0x005b97, 0x047CCC, 0x19A9FC, 0x5BC6FC)
+    "LightGray" = @(0xf5f5f5, 0xd9d9d9)
 }
 
 $ABBREVIATIONS = @{
@@ -635,8 +636,7 @@ function Format-Quartiles {
                     "Q4"  = 4
                 }
             }
-            "meta" = @{
-                "columnFormats" = @($format, $format, $format, $format, $format )
+            "meta" = @{ 
                 "dataWidth" = 5
                 "name" = "Quartiles"
                 "numWrites" = 2 + 6
@@ -681,6 +681,18 @@ function Format-Quartiles {
                         "hide" = $true
                         "name" = " "
                     }
+                    2 = @{ 
+                        "color" = $ColorPalette.blue[1]
+                    }
+                    3 = @{ 
+                        "color" = $ColorPalette.blue[3]
+                    }
+                    4 = @{ 
+                        "color" = $ColorPalette.blue[0]
+                    }
+                    5 = @{ 
+                        "color" = $ColorPalette.blue[2]
+                    }
                 }
                 "axisSettings" = @{
                     1 = @{
@@ -688,10 +700,100 @@ function Format-Quartiles {
                     }
                     2 = @{
                         "minorGridlines" = $true
+                        "minorGridlinesColor" = $ColorPalette.LightGray[0]
+                        "majorGridlinesColor" = $ColorPalette.LightGray[1]
                         "title" = $meta.units[$prop]
                     }
                 }
             }
+        }
+
+        if ($meta.comparison) {
+            $table.cols = @{
+                $tableTitle = @{
+                    "<baseline>min" = 0
+                    "<baseline>Q1"  = 1
+                    "<baseline>Q2"  = 2
+                    "<baseline>Q3"  = 3
+                    "<baseline>Q4"  = 4
+                    "<test>min" = 5
+                    "<test>Q1"  = 6
+                    "<test>Q2"  = 7
+                    "<test>Q3"  = 8
+                    "<test>Q4"  = 9
+                }
+            }
+            $table.data = @{
+                $tableTitle = @{
+                    "<baseline>min" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<baseline>Q1" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<baseline>Q2" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<baseline>Q3" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<baseline>Q4" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<test>min" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<test>Q1" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<test>Q2" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<test>Q3" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                    "<test>Q4" = @{
+                        $prop = @{
+                            $innerPivot = @{}
+                        }
+                    }
+                }
+            }
+            $table.chartSettings.seriesSettings[6] = @{
+                "hide" = $true
+                "name" = " "
+            }
+            $table.chartSettings.seriesSettings[7] = @{
+                "color" = $ColorPalette.orange[1]
+            }
+            $table.chartSettings.seriesSettings[8] = @{
+                "color" = $ColorPalette.orange[3]
+            }
+            $table.chartSettings.seriesSettings[9] = @{
+                "color" = $ColorPalette.orange[0]
+            }
+            $table.chartSettings.seriesSettings[10] = @{
+                "color" = $ColorPalette.orange[2]
+            }
+            $table.meta.columnFormats = @($format) * $table.cols.$tableTitle.Count; 
         }
     
         
@@ -716,24 +818,34 @@ function Format-Quartiles {
                 }
                 $row += 2
 
-                $table.data.$TableTitle.min.$prop.$innerPivot.$IPivotKey = @{
-                    "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
+                $table.data.$TableTitle."<baseline>min".$prop.$innerPivot.$IPivotKey = @{
+                    "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min } 
+                }
+                $table.data.$TableTitle."<test>min".$prop.$innerPivot.$IPivotKey = @{ 
                     "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.min}
                 }
-                $table.data.$TableTitle.Q1.$prop.$innerPivot.$IPivotKey = @{
+                $table.data.$TableTitle."<baseline>Q1".$prop.$innerPivot.$IPivotKey = @{
                     "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] - $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
+                }
+                $table.data.$TableTitle."<test>Q1".$prop.$innerPivot.$IPivotKey = @{
                     "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[25] - $data.$OPivotKey.$prop.$IPivotKey.test.stats.min }
                 }
-                $table.data.$TableTitle.Q2.$prop.$innerPivot.$IPivotKey = @{
+                $table.data.$TableTitle."<baseline>Q2".$prop.$innerPivot.$IPivotKey = @{
                     "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] } 
+                }
+                $table.data.$TableTitle."<test>Q2".$prop.$innerPivot.$IPivotKey = @{
                     "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[50] - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[25] } 
                 }
-                $table.data.$TableTitle.Q3.$prop.$innerPivot.$IPivotKey = @{
+                $table.data.$TableTitle."<baseline>Q3".$prop.$innerPivot.$IPivotKey = @{
                     "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50] } 
+                }
+                $table.data.$TableTitle."<test>Q3".$prop.$innerPivot.$IPivotKey = @{  
                     "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[75] - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[50] }
                 }
-                $table.data.$TableTitle.Q4.$prop.$innerPivot.$IPivotKey = @{
+                $table.data.$TableTitle."<baseline>Q4".$prop.$innerPivot.$IPivotKey = @{
                     "baseline" = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.max - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] }
+                }
+                $table.data.$TableTitle."<test>Q4".$prop.$innerPivot.$IPivotKey = @{
                     "test"     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.max - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[75] }
                 }
             }
@@ -744,8 +856,10 @@ function Format-Quartiles {
         $table.meta.dataWidth     = Get-TreeWidth $table.cols
         $table.meta.colLabelDepth = Get-TreeDepth $table.cols
         $table.meta.dataHeight    = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows 
-        $table.meta.numWrites    += $table.meta.dataHeight * $table.meta.dataWidth 
+        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows  
+        $table.meta.numWrites    += $table.meta.dataHeight * $table.meta.dataWidth
+        
+         
         $tables = $tables + $table
     }
 
@@ -834,6 +948,8 @@ function Format-MinMaxChart {
                     }
                     2 = @{
                         "minorGridlines" = $true
+                        "minorGridlinesColor" = $ColorPalette.LightGray[0]
+                        "majorGridlinesColor" = $ColorPalette.LightGray[1]
                         "title" = $meta.units.$prop
                     }
                 }
@@ -842,43 +958,43 @@ function Format-MinMaxChart {
         if ($meta.comparison) {
             $table.chartSettings.seriesSettings = @{
                 1 = @{
-                    "color"       = $ColorPalette.Blue[2]
-                    "markerColor" = $ColorPalette.Blue[2]
+                    "color"       = $ColorPalette.blue[3]
+                    "markerColor" = $ColorPalette.blue[3]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 2 = @{
-                    "color"       = $ColorPalette.Orange[2]
-                    "markerColor" = $ColorPalette.Orange[2]
+                    "color"       = $ColorPalette.orange[3]
+                    "markerColor" = $ColorPalette.orange[3]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 3 = @{
-                    "color"       = $ColorPalette.Blue[1]
-                    "markerColor" = $ColorPalette.Blue[1]
+                    "color"       = $ColorPalette.blue[2]
+                    "markerColor" = $ColorPalette.blue[2]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 4 = @{
-                    "color"       = $ColorPalette.Orange[1]
-                    "markerColor" = $ColorPalette.Orange[1]
+                    "color"       = $ColorPalette.orange[2]
+                    "markerColor" = $ColorPalette.orange[2]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 5 = @{
-                    "color"       = $ColorPalette.Blue[0]
-                    "markerColor" = $ColorPalette.Blue[0]
+                    "color"       = $ColorPalette.blue[1]
+                    "markerColor" = $ColorPalette.blue[1]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 6 = @{
-                    "color"       = $ColorPalette.Orange[0]
-                    "markerColor" = $ColorPalette.Orange[0]
+                    "color"       = $ColorPalette.orange[1]
+                    "markerColor" = $ColorPalette.orange[1]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
@@ -888,22 +1004,22 @@ function Format-MinMaxChart {
         else {
             $table.chartSettings.seriesSettings = @{
                 1 = @{
-                    "color"       = $ColorPalette.Blue[2]
-                    "markerColor" = $ColorPalette.Blue[2]
+                    "color"       = $ColorPalette.blue[3]
+                    "markerColor" = $ColorPalette.blue[3]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 2 = @{
-                    "color"       = $ColorPalette.Blue[1]
-                    "markerColor" = $ColorPalette.Blue[1]
+                    "color"       = $ColorPalette.blue[2]
+                    "markerColor" = $ColorPalette.blue[2]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 3 = @{
-                    "color"       = $ColorPalette.Blue[0]
-                    "markerColor" = $ColorPalette.Blue[0]
+                    "color"       = $ColorPalette.blue[1]
+                    "markerColor" = $ColorPalette.blue[1]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
@@ -1073,7 +1189,7 @@ function Format-Percentiles {
                     "chartType" = [Excel.XlChartType]::xlXYScatterLinesNoMarkers
                     "seriesSettings" = @{
                         1 = @{ 
-                            "color"      = $ColorPalette.Blue[1]
+                            "color"      = $ColorPalette.blue[2]
                             "lineWeight" = 3
                         }
                     }
@@ -1114,7 +1230,7 @@ function Format-Percentiles {
                     "delete" = $true
                 }
                 $table.chartSettings.seriesSettings[3] = @{
-                    "color"      = $ColorPalette.Orange[1]
+                    "color"      = $ColorPalette.orange[2]
                     "lineWeight" = 3
                 }
                 $table.meta.columnFormats = @($meta.format.$prop, "0.0%", $meta.format.$prop)
@@ -1258,7 +1374,7 @@ function Get-HistogramTemplate {
             "xOffset" = 1
             "seriesSettings" = @{
                 1 = @{ 
-                    "color" = $ColorPalette.Blue[1]
+                    "color" = $ColorPalette.blue[2]
                     "lineWeight" = 3
                     "name" = "Frequency"
                 }
@@ -1301,7 +1417,7 @@ function Get-HistogramTemplate {
             "delete" = $true # don't plot % change
         }
         $table.chartSettings.seriesSettings[3] = @{
-            "color"      = $ColorPalette.Orange[1]
+            "color"      = $ColorPalette.blue[2]
             "name"       = "Test"
             "lineWeight" = 3
         }
@@ -1510,8 +1626,8 @@ function Format-Distribution {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
                             "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
-                            "markerBackgroundColor" = $ColorPalette.Blue[2]
-                            "markerForegroundColor" = $ColorPalette.Blue[1]
+                            "markerBackgroundColor" = $ColorPalette.blue[3]
+                            "markerForegroundColor" = $ColorPalette.blue[2]
                             "name"                  = "$Prop Sample" 
                         }
                 }
@@ -1519,8 +1635,8 @@ function Format-Distribution {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
                             "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
-                            "markerBackgroundColor" = $ColorPalette.Orange[2]
-                            "markerForegroundColor" = $ColorPalette.Orange[1]
+                            "markerBackgroundColor" = $ColorPalette.blue[3]
+                            "markerForegroundColor" = $ColorPalette.blue[2]
                             "name"                  = "$Prop Sample"
                         }
                 }

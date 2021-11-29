@@ -163,11 +163,12 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
         if ($PathCosts.ContainsKey($file)) {
             # There is a bug in Get-VswitchPathCost where sometimes throughput counters return 0
             # and CPB calculation leads to a very large number.
-            # This is to skip those outlier cases. 
-            if ($PathCosts[$file]["Byte path cost (cycles/byte)"] -gt 1000) {
-                continue
-            }
-            $entry["cycles/byte"] = $PathCosts[$file]["Byte path cost (cycles/byte)"]
+            
+            $avgTput = ((1000 * 1000 * 1000) / 8) * ($entry["throughput"] | Measure-Object -Average).Average
+            $cpb = $PathCosts[$file]["Total CPU cycles used per second"] / $avgTput
+            if ($cpb -lt 1000) {
+                $entry["cycles/byte"] = $cpb 
+            } 
         }
     }
 }
