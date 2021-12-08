@@ -2,6 +2,7 @@ $NTTTCPPivots = @("sessions", "bufferLen", "bufferCount", "none")
 $LATTEPivots = @("protocol", "sendMethod", "none")
 $CTSPivots = @("sessions", "none")
 $CPSPivots = @("none")
+$LagScopePivots = @("protocol", "none")
 
 
 
@@ -14,11 +15,20 @@ $CPSPivots = @("none")
 
     if ($FakeBoundParameters.ContainsKey("NTTTCP")) {
         return $NTTTCPPivots | where {$_ -like "$WordToComplete*"}
-    } elseif ($FakeBoundParameters.ContainsKey("LATTE")) {
+    } 
+    elseif ($FakeBoundParameters.ContainsKey("LATTE")) {
         return $LATTEPivots | where {$_ -like "$WordToComplete*"}
-    } elseif ($FakeBoundParameters.ContainsKey("CTStraffic")) {
+    } 
+    elseif ($FakeBoundParameters.ContainsKey("CTStraffic")) {
         return $CTSPivots | where {$_ -like "$WordToComplete*"}
-    } else {
+    } 
+    elseif ($FakeBoundParameters.ContainsKey("LagScope")) {
+        return $LagScopePivots | where {$_ -like "$WordsToComplete*"}
+    } 
+    elseif ($FakeBoundParameters.ContainsKey("CPS")) {
+        return $CPSPivots | where {$_ -like "$WordsToComplete*"}
+    } 
+    else {
         return @("")
     }
 }
@@ -120,6 +130,9 @@ function New-NetworkVisualization {
         [Parameter(Mandatory=$true, ParameterSetName="CPS")]
         [Switch] $CPS,
 
+        [Parameter(Mandatory=$true, ParameterSetName="LagScope")]
+        [Switch] $LagScope,
+
         [Parameter(Mandatory=$true)]
         [String] $BaselineDir, 
 
@@ -140,6 +153,7 @@ function New-NetworkVisualization {
 
         [Parameter(Mandatory=$false, ParameterSetName = "LATTE")]
         [Parameter(Mandatory=$false, ParameterSetName = "CPS")]
+        [Parameter(Mandatory=$false, ParameterSetName = "LagScope")]
         [Int] $SubsampleRate = -1
     )
     $starttime = (Get-Date)
@@ -172,25 +186,21 @@ function New-NetworkVisualization {
 
 
     $tables = @()
-    foreach ($oPivotKey in $processedData.data.Keys) {
+    foreach ($oPivotKey in $processedData.data.Keys) { 
+        $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
         if ($tool -in @("NTTTCP", "CTStraffic")) {
-            #$tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
-            $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
+            #$tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool   
             $tables += Format-Quartiles    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
             $tables += Format-MinMaxChart  -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
-        } elseif ($tool -in @("LATTE")) {
-            $tables += Format-Stats        -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+        } elseif ($tool -in @("LATTE", "LagScope")) { 
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
-            
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
         } elseif ($tool -in @("CPS")) {
-            $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "conn/s" -SubSampleRate $SubsampleRate
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "close/s" -SubSampleRate $SubsampleRate
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
         }
-        $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-         
+        $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
     } 
     
     
@@ -251,6 +261,10 @@ function Confirm-Pivots ($Tool, $InnerPivot, $OuterPivot) {
         }
         "CPS" {
             $CPSPivots
+            break
+        }
+        "LagScope" {
+            $LagScopePivots
             break
         }
     }

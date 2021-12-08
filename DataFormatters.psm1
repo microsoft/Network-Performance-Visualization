@@ -1375,7 +1375,7 @@ function Get-HistogramTemplate {
             "seriesSettings" = @{
                 1 = @{ 
                     "color" = $ColorPalette.blue[2]
-                    "lineWeight" = 3
+                    "lineWeight" = 1
                     "name" = "Frequency"
                 }
             }

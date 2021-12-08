@@ -1,8 +1,8 @@
 ﻿<#
 .SYNOPSIS
-    This function parses each file in the specified directory for
-    the given tool. The data is packaged into an array, one entry
-    per file, along with meta data.
+    This function parses every file in a specified directory. The data from each individual
+    file is represented through a HashSet. The Hashtables containing data for each file are 
+    stored in an array and returned along with meta data.
 .PARAMETER DirName
     Path to the directory with the data files.
 .PARAMETER Tool
@@ -72,6 +72,25 @@ function Get-RawData {
                 "noTable"  = [Array]@("filename", "sendMethod", "protocol")
             }
         }
+        "LagScope" {
+            $parseFunc = ${Function:Parse-LagScope}
+
+            $output."meta" = @{
+                "props" = [Array] @(
+                    "latency"
+                )
+                "units" = @{
+                    "latency"  = "us"
+                }
+                "goal" = @{
+                    "latency"  = "decrease"
+                }
+                "format" = @{
+                    "latency"  = "#.0"
+                }
+                "noTable"  = [Array]@("filename", "sendMethod", "protocol")
+            }
+        }
         "CTStraffic" {
             $parseFunc = ${Function:Parse-CTSTraffic}
 
@@ -121,15 +140,15 @@ function Get-RawData {
     $OuterPivotKeys = @{}
 
     $id = if ($Mode -eq "Baseline") {0} else {1}
-    $output.data = [Array]@()
-    $addedPathCosts = $false
+    $output.data = [Array]@() 
+    $numPathCosts = 0
     for($i = 0; $i -lt $files.Count; $i++) { 
         Write-Progress -Activity "Parsing $($Mode) Data Files..." -Status "Parsing..." -Id $id -PercentComplete (100 * (($i) / $files.Count))
         $output.data += , (& $parseFunc -FileName $files[$i].FullName -InnerPivot $InnerPivot -OuterPivot $OuterPivot `
                             -InnerPivotKeys $InnerPivotKeys  -OuterPivotKeys $OuterPivotKeys -PathCosts $PathCosts) 
-        if (($PathCosts.Count -gt 0) -and (-not $addedPathCosts)) {
+        if ($PathCosts.Count -ne $numPathCosts) {
             $output.data = $output.data[0..($output.Count - 1)]
-            $addedPathCosts = $true 
+            $numPathCosts = $PathCosts.Count
         }
     }
 
@@ -156,7 +175,16 @@ function Get-RawData {
     return $output
 }
 
+<#
+.SYNOPSIS
+    Reads data from HashTable containing pathcost data and writes the values to the DataEntry 
+    objects corresponding to each individual file.
 
+.PARAMETER Data
+    Array of DataEntry objects which each correspond to a single data file.
+.PARAMETER PathCosts
+    Hashtable containing a mapping between data filenames and pathcosts data
+#>
 function Incorporate-PathCosts ($Data, $PathCosts) {
     foreach ($entry in $Data) {
         $file = $entry.filename.Split("\")[-1]
@@ -176,9 +204,10 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
 
 <#
 .SYNOPSIS
-    Parses XML-formated NTTTCP output data file.
+    Parses a single XML-formated NTTTCP output data file. Relevant data is collected and returned
+    as a Hashtable.
 .PARAMETER FileName
-    Path of file to be parsed.
+    Path of file to be parsed. 
 .PARAMETER InnerPivotKeys
     Set containing all inner pivot keys encountered across all data files
 .PARAMETER OuterPivotKeys
@@ -228,7 +257,15 @@ function Parse-NTTTCP ([String] $FileName, $InnerPivot, $OuterPivot, $InnerPivot
     return $dataEntry
 }
 
-
+<#
+.SYNOPSIS
+    Parses a single pathcosts data file, extracts relevant data, and stores the data in a 
+    HashTable.
+.PARAMETER Filename
+    Path of file to be parsed
+.PARAMETER PathCosts
+    Hashtable to which pathcosts data is written
+#>
 function Extract-PathCosts ($Filename, $PathCosts) {
     (Get-Content -Path $Filename | ConvertFrom-Json).psobject.properties | Foreach {
         $key = $_.Name     
@@ -243,11 +280,8 @@ function Extract-PathCosts ($Filename, $PathCosts) {
 
 <#
 .SYNOPSIS
-    Parses CTSTraffic output.
-.DESCRIPTION
-    This function parses a CTStraffic status log file, generated from
-    the -StatusFilename option. Desired data is collected and returned
-    in a Hashtable.
+    This function parses a single CTStraffic status log file. Desired data is collected and returned
+    as a Hashtable.
 .PARAMETER Filename
     Path of the status log file to parse.
 .PARAMETER InnerPivotKeys
@@ -307,11 +341,8 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
  
 <#
 .SYNOPSIS
-    Parses LATTE output data files
-.DESCRIPTION
-    This function parses a CTStraffic status log file, generated from
-    the -StatusFilename option. Desired data is collected and returned
-    in a Hashtable.
+    This function parses a single LATTE data file. Relevant data is collected and returned
+    as a Hashtable.
 .PARAMETER Filename
     Path of the status log file to parse.
 .PARAMETER InnerPivotKeys
@@ -394,15 +425,93 @@ function Parse-LATTE ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotK
     $OuterPivotKeys[$oPivotKey] = $true
     return $dataEntry
 }
+
+<#
+.SYNOPSIS
+    This function parses a single LagScope data file. Relevant data is collected and returned
+    as a Hashtable. 
+.PARAMETER Filename
+    Path of the data file to parse.
+.PARAMETER InnerPivotKeys
+    Set containing all inner pivot keys encountered across all data files
+.PARAMETER OuterPivotKeys
+    Set containing all outer pivot keys encountered across all data files
+.PARAMETER InnerPivot
+    Name of inner pivot property
+.PARAMETER OuterPivot
+    Name of outer pivot property
+#>
+function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+
+    if ($Filename -match "pathcost") {
+        Extract-PathCost -Filename $Filename -PathCosts $PathCosts 
+        return
+    }
+
+    $file = Get-Content $FileName
+
+    $rawDataEntry = @{
+        "filename" = $FileName
+    }
+    $histDataEntry = @{
+        "filename" = $Filename
+    }
+
+    [Array] $latency = @()
+
+    $hasHistogram = $false
+    $histogram = @{}
+    foreach ($line in $file) {
+        $splitLine = Remove-EmptyStrings $line.Split(" ")
+
+        if ($splitLine.Count -eq 0) {continue}
+
+        if ($line.Trim() -eq "Interval(usec)	 Frequency") {
+            $hasHistogram = $true 
+            continue
+        }
+
+        if ($hasHistogram) {
+            $histogram[[Int]$splitLine[0]] = [Int]$splitLine[1]
+            continue
+        }
+
+        if ($splitLine[0] -Like "protocol*") {
+            $rawDataEntry.protocol = $splitline[-1]
+            $histDataEntry.protocol = $splitline[-1]
+            continue
+        } 
+        
+        if ($splitLine[-1] -Like "time=*") {
+            $latstr = $splitLine[-1]
+            $labelLen = "time=".Length
+            $unitLen = "us".Length 
+            $latency += ,[int] $latstr.Substring($labelLen, $latstr.Length - ($labelLen + $unitLen))
+        } 
+    }
+    $rawDataEntry.latency = $latency 
+    $histDataEntry.latency = $histogram
+
+    $iPivotKey = if ($rawDataEntry[$InnerPivot]) {$rawDataEntry[$InnerPivot]} else {""}
+    $oPivotKey = if ($rawDataEntry[$OuterPivot]) {$rawDataEntry[$OuterPivot]} else {""}
+
+    $InnerPivotKeys[$iPivotKey] = $true
+    $OuterPivotKeys[$oPivotKey] = $true
+
+    $output = @($rawDataEntry)
+    if ($histogram.Count -gt 0) {
+        $output = @($rawDataEntry, $histDataEntry)
+    }
+
+    return $output
+}
  
 
 <#
 .SYNOPSIS 
-    Parses CPS output data files
-.DESCRIPTION
     This function parses a single file containing CPS data. Each line contains
-    conn/s and close/s samples which are extracted into arrays, packaged into a dataEntry 
-    object, and returned. 
+    conn/s and close/s samples which are extracted into arrays, packaged into a 
+    HashTable, and returned. 
 .PARAMETER Filename
     Path of the status log file to parse.
 .PARAMETER InnerPivotKeys
@@ -458,8 +567,9 @@ function Parse-CPS ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKey
 function Remove-EmptyStrings ($Arr) {
     $newArr = [Array] @()
     foreach ($val in $arr) {
-        if ($val -ne "") {
-            $newArr += $val.Trim()
+        $trimVal = $val.Trim()
+        if ($trimVal -ne "") {
+            $newArr += $trimVal
         }
     }
     return $newArr
