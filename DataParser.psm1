@@ -36,19 +36,19 @@ function Get-RawData {
             $output."meta" = @{
                 "props" = [Array] @(
                     "throughput",
-                    "cycles"
+                    "cycles/byte"
                 )
                 "units" = @{
-                    "cycles"     = "cycles/byte"
+                    "cycles/byte"     = "cycles/byte"
                     "throughput" = "Gbps"
                 }
                 "goal" = @{
                     "throughput" = "increase"
-                    "cycles"     = "decrease"
+                    "cycles/byte"     = "decrease"
                 }
                 "format" = @{
                     "throughput" = "0.00"
-                    "cycles"     = "0.00"
+                    "cycles/byte"     = "0.00"
                 }
                 "noTable"  = [Array] @("filename", "sessions", "bufferLen", "bufferCount")
             }
@@ -242,7 +242,7 @@ function Parse-NTTTCP ([String] $FileName, $InnerPivot, $OuterPivot, $InnerPivot
     $dataEntry = @{
         "sessions"    = $sessions
         "throughput"  = $throughput
-        "cycles"      = $cycles
+        "cycles/byte" = $cycles
         "filename"    = $FileName
         "bufferLen"   = $bufferLen
         "bufferCount" = $bufferCount
