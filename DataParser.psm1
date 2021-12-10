@@ -189,14 +189,25 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
     foreach ($entry in $Data) {
         $file = $entry.filename.Split("\")[-1]
         if ($PathCosts.ContainsKey($file)) {
-            # There is a bug in Get-VswitchPathCost where sometimes throughput counters return 0
-            # and CPB calculation leads to a very large number.
             
-            $avgTput = ((1000 * 1000 * 1000) / 8) * ($entry["throughput"] | Measure-Object -Average).Average
-            $cpb = $PathCosts[$file]["Total CPU cycles used per second"] / $avgTput
+            $cpb = $PathCosts[$file]["Byte path cost (cycles/byte)"]
+
+            # TPUT measures from dedicated tools are more reliable than vswitch counters 
+            # (which sometimes return 0 erroneously), thus we perform the cycles/byte calculation
+            # using our own TPUT measures when possible
+            if ($PathCosts[$file].ContainsKey("Total CPU cycles used per second")) {
+                $avgTput = ((1000 * 1000 * 1000) / 8) * ($entry["throughput"] | Measure-Object -Average).Average
+                $cpb = $PathCosts[$file]["Total CPU cycles used per second"] / $avgTput
+            }
+                # Sometimes counters mess up and record nearly-zero for tput and it causes 
+                # cycle/byte calculations to return extremely large numbers. These outliers
+                # make visualizations nearly un-readable, thus we filter outliers here. We 
+                # should look for a more sustainable solution in the future
             if ($cpb -lt 1000) {
                 $entry["cycles/byte"] = $cpb 
             } 
+            
+            
         }
     }
 }
