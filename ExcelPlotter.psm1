@@ -32,7 +32,7 @@ function Create-ExcelFile {
     $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
 
     # Can be set to true for debugging purposes
-    $excelObject.Visible = $false
+    $excelObject.Visible = $true
 
     $workbookObject = $excelObject.Workbooks.Add()
     $worksheetObject = $workbookObject.Worksheets.Item(1)

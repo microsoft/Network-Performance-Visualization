@@ -187,14 +187,14 @@ function New-NetworkVisualization {
 
     $tables = @()
     foreach ($oPivotKey in $processedData.data.Keys) { 
-        $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+        #$tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
         if ($tool -in @("NTTTCP", "CTStraffic")) {
             #$tables += Format-RawData      -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool   
             $tables += Format-Quartiles    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
             $tables += Format-MinMaxChart  -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
         } elseif ($tool -in @("LATTE", "LagScope")) { 
-            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
-            $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+            $tables += Format-Distribution2 -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
+            #$tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
         } elseif ($tool -in @("CPS")) {
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "conn/s" -SubSampleRate $SubsampleRate
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "close/s" -SubSampleRate $SubsampleRate

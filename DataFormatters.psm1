@@ -11,9 +11,10 @@ $ColorPalette = @{
     "Green"      = 0x135C1E
     "LightRed"   = 0x9EA1FF
     "Red"        = 0x202A80
-    "Blue"      = @(0x633f16, 0x9C6527, 0xD68546, 0xFFB894) # Dark -> Light
-    "Orange"    = @(0x005b97, 0x047CCC, 0x19A9FC, 0x5BC6FC)
+    "Blue"      = @(0x560000, 0x691511, 0x7C2A22, 0x8F3F33, 0xA25444, 0xB56955, 0xC87E66, 0xDB9377, 0xEEA888) #@(0x633f16, 0x9C6527, 0xD68546, 0xFFB894) # Dark -> Light
+    "Orange"    = @(0x0069B0, 0xF74B9, 0x1E7FC2, 0x2D8ACB, 0x3C95D4, 0x4BA0DD, 0x5AABE6, 0x69B6EF, 0x78C1F8) #@(0x005b97, 0x047CCC, 0x19A9FC, 0x5BC6FC)
     "LightGray" = @(0xf5f5f5, 0xd9d9d9)
+    "White"     = 0xFFFFFF
 }
 
 $ABBREVIATIONS = @{
@@ -682,16 +683,16 @@ function Format-Quartiles {
                         "name" = " "
                     }
                     2 = @{ 
-                        "color" = $ColorPalette.blue[1]
+                        "color" = $ColorPalette.Blue[3]
                     }
                     3 = @{ 
-                        "color" = $ColorPalette.blue[3]
+                        "color" = $ColorPalette.Blue[8]
                     }
                     4 = @{ 
                         "color" = $ColorPalette.blue[0]
                     }
                     5 = @{ 
-                        "color" = $ColorPalette.blue[2]
+                        "color" = $ColorPalette.Blue[6]
                     }
                 }
                 "axisSettings" = @{
@@ -782,16 +783,16 @@ function Format-Quartiles {
                 "name" = " "
             }
             $table.chartSettings.seriesSettings[7] = @{
-                "color" = $ColorPalette.orange[1]
+                "color" = $ColorPalette.Orange[3]
             }
             $table.chartSettings.seriesSettings[8] = @{
-                "color" = $ColorPalette.orange[3]
+                "color" = $ColorPalette.Orange[8]
             }
             $table.chartSettings.seriesSettings[9] = @{
                 "color" = $ColorPalette.orange[0]
             }
             $table.chartSettings.seriesSettings[10] = @{
-                "color" = $ColorPalette.orange[2]
+                "color" = $ColorPalette.Orange[6]
             }
             $table.meta.columnFormats = @($format) * $table.cols.$tableTitle.Count; 
         }
@@ -958,43 +959,43 @@ function Format-MinMaxChart {
         if ($meta.comparison) {
             $table.chartSettings.seriesSettings = @{
                 1 = @{
-                    "color"       = $ColorPalette.blue[3]
-                    "markerColor" = $ColorPalette.blue[3]
+                    "color"       = $ColorPalette.Blue[8]
+                    "markerColor" = $ColorPalette.Blue[8]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 2 = @{
-                    "color"       = $ColorPalette.orange[3]
-                    "markerColor" = $ColorPalette.orange[3]
+                    "color"       = $ColorPalette.Orange[8]
+                    "markerColor" = $ColorPalette.Orange[8]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 3 = @{
-                    "color"       = $ColorPalette.blue[2]
-                    "markerColor" = $ColorPalette.blue[2]
+                    "color"       = $ColorPalette.Blue[6]
+                    "markerColor" = $ColorPalette.Blue[6]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 4 = @{
-                    "color"       = $ColorPalette.orange[2]
-                    "markerColor" = $ColorPalette.orange[2]
+                    "color"       = $ColorPalette.Orange[6]
+                    "markerColor" = $ColorPalette.Orange[6]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 5 = @{
-                    "color"       = $ColorPalette.blue[1]
-                    "markerColor" = $ColorPalette.blue[1]
+                    "color"       = $ColorPalette.Blue[3]
+                    "markerColor" = $ColorPalette.Blue[3]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 6 = @{
-                    "color"       = $ColorPalette.orange[1]
-                    "markerColor" = $ColorPalette.orange[1]
+                    "color"       = $ColorPalette.Orange[3]
+                    "markerColor" = $ColorPalette.Orange[3]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
@@ -1004,22 +1005,22 @@ function Format-MinMaxChart {
         else {
             $table.chartSettings.seriesSettings = @{
                 1 = @{
-                    "color"       = $ColorPalette.blue[3]
-                    "markerColor" = $ColorPalette.blue[3]
+                    "color"       = $ColorPalette.Blue[8]
+                    "markerColor" = $ColorPalette.Blue[8]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 2 = @{
-                    "color"       = $ColorPalette.blue[2]
-                    "markerColor" = $ColorPalette.blue[2]
+                    "color"       = $ColorPalette.Blue[6]
+                    "markerColor" = $ColorPalette.Blue[6]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
                 }
                 3 = @{
-                    "color"       = $ColorPalette.blue[1]
-                    "markerColor" = $ColorPalette.blue[1]
+                    "color"       = $ColorPalette.Blue[3]
+                    "markerColor" = $ColorPalette.Blue[3]
                     "markerStyle" = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
                     "lineWeight"  = 3
                     "markerSize"  = 5
@@ -1189,7 +1190,7 @@ function Format-Percentiles {
                     "chartType" = [Excel.XlChartType]::xlXYScatterLinesNoMarkers
                     "seriesSettings" = @{
                         1 = @{ 
-                            "color"      = $ColorPalette.blue[2]
+                            "color"      = $ColorPalette.Blue[6]
                             "lineWeight" = 3
                         }
                     }
@@ -1230,7 +1231,7 @@ function Format-Percentiles {
                     "delete" = $true
                 }
                 $table.chartSettings.seriesSettings[3] = @{
-                    "color"      = $ColorPalette.orange[2]
+                    "color"      = $ColorPalette.Orange[6]
                     "lineWeight" = 3
                 }
                 $table.meta.columnFormats = @($meta.format.$prop, "0.0%", $meta.format.$prop)
@@ -1374,7 +1375,7 @@ function Get-HistogramTemplate {
             "xOffset" = 1
             "seriesSettings" = @{
                 1 = @{ 
-                    "color" = $ColorPalette.blue[2]
+                    "color" = $ColorPalette.Blue[6]
                     "lineWeight" = 1
                     "name" = "Frequency"
                 }
@@ -1417,7 +1418,7 @@ function Get-HistogramTemplate {
             "delete" = $true # don't plot % change
         }
         $table.chartSettings.seriesSettings[3] = @{
-            "color"      = $ColorPalette.blue[2]
+            "color"      = $ColorPalette.Blue[6]
             "name"       = "Test"
             "lineWeight" = 3
         }
@@ -1626,8 +1627,8 @@ function Format-Distribution {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
                             "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
-                            "markerBackgroundColor" = $ColorPalette.blue[3]
-                            "markerForegroundColor" = $ColorPalette.blue[2]
+                            "markerBackgroundColor" = $ColorPalette.Blue[8]
+                            "markerForegroundColor" = $ColorPalette.Blue[6]
                             "name"                  = "$Prop Sample" 
                         }
                 }
@@ -1635,8 +1636,8 @@ function Format-Distribution {
                 $table.chartSettings.seriesSettings = @{
                     1 = @{
                             "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
-                            "markerBackgroundColor" = $ColorPalette.blue[3]
-                            "markerForegroundColor" = $ColorPalette.blue[2]
+                            "markerBackgroundColor" = $ColorPalette.Blue[8]
+                            "markerForegroundColor" = $ColorPalette.Blue[6]
                             "name"                  = "$Prop Sample"
                         }
                 }
@@ -1759,6 +1760,306 @@ function Format-Distribution {
     return $tables
 }
 
+##
+# Format-Distribution2
+# -------------------
+# This function formats a table in order to create a chart that displays the the
+# distribution of data over time.
+#
+# Parameters
+# ----------
+# DataObj (HashTable) - Object containing processed data, raw data, and meta data
+# TableTitle (String) - Title to be displayed at the top of each table
+# Prop (String) - The name of the property for which a table should be created (raw data must be in array form)
+# SubSampleRate (int) - How many time samples should be grouped together for a single data point on the chart
+#
+# Return
+# ------
+# HashTable[] - Array of HashTable objects which each store a table of formatted distribution data
+#
+##
+function Format-Distribution2 {
+    Param (
+        [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
+
+        [Parameter()] [string] $OPivotKey,
+
+        [Parameter()] [String] $Tool = "",
+
+        [Parameter()] [String] $Prop,
+
+        [Parameter()] [Int] $SubSampleRate = -1,
+
+        [Parameter()] [switch] $NoNewWorksheets
+        
+    )
+
+    $DEFALT_SEGMENTS_TARGET = 200
+
+    $meta  = $DataObj.meta 
+    $modes = if ($meta.comparison) { @("baseline", "test") } else { @(,"baseline") } 
+    $tables     = @()
+    $innerPivot = $meta.InnerPivot
+    $outerPivot = $meta.OuterPivot
+
+    $NumSamples = Calculate-MaxNumSamples -RawData $DataObj.rawData -Modes $modes -Prop $Prop
+    if ($SubSampleRate -eq -1) {
+        $SubSampleRate = [Int] ($NumSamples/$DEFALT_SEGMENTS_TARGET)
+    } 
+    $numIters = Calculate-NumIterations -Distribution -DataObj $dataObj -Prop $Prop -SubSampleRate $SubSampleRate
+    $j = 0
+
+    foreach ($IPivotKey in $DataObj.data.$OPivotKey.$Prop.Keys) { 
+        foreach ($mode in $modes) { 
+            if (-Not $DataObj.data.$OPivotKey.$Prop.$IPivotKey.$mode.stats) {
+                continue
+            } 
+
+            
+            $logarithmic = Set-Logarithmic -Data $dataObj.data -OPivotKey $OPivotKey -Prop $Prop -IPivotKey $IPivotKey `
+                                            -Meta $meta
+            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+            $data       = $dataObj.rawData.$mode 
+            $table = @{
+                "meta" = @{
+                    "name" = "Distribution"
+                    "numWrites" = 1 + 3
+                }
+                "rows" = @{
+                    "Data Point" = @{}
+                }
+                "cols" = @{
+                    $tableTitle = @{
+                        "" = @{
+                            "Time Segment" = 0
+                        }
+                        $Prop = @{
+                            "max" = 1
+                            "p999" = 2
+                            "p99" = 3
+                            "p90" = 4
+                            "p75" = 5
+                            "p50" = 6
+                            "p25" = 7
+                            "p10" = 8
+                            "min" = 9
+                        }
+                    }
+                }
+                "data" = @{
+                    $tableTitle = @{
+                        "" = @{
+                            "Time Segment" = @{
+                                "Data Point" = @{}
+                            }
+                        }
+                        $Prop = @{
+                            "max" = @{
+                                "Data Point" = @{}
+                            }
+                            "p999" = @{
+                                "Data Point" = @{}
+                            }
+                            "p99" = @{
+                                "Data Point" = @{}
+                            }
+                            "p90" = @{
+                                "Data Point" = @{}
+                            }
+                            "p75" = @{
+                                "Data Point" = @{}
+                            }
+                            "p50" = @{
+                                "Data Point" = @{}
+                            }
+                            "p25" = @{
+                                "Data Point" = @{}
+                            }
+                            "p10" = @{
+                                "Data Point" = @{}
+                            }
+                            "min" = @{
+                                "Data Point" = @{}
+                            }
+                        }
+                    }
+                }
+                "chartSettings" = @{
+                    "chartType" = [Excel.XlChartType]::xlArea
+                    "yOffset"   = 2
+                    "xOffset"   = 2
+                    "title"     = "Temporal $prop Distribution"
+                    "axisSettings" = @{
+                        1 = @{
+                            "title"          = "Time Series"
+                            "minorGridlines" = $true
+                            "majorGridlines" = $true
+                            "max"            = $NumSamples
+                        }
+                        2 = @{
+                            "title"       = $meta.units.$Prop
+                            "logarithmic" = $logarithmic
+                            "min"         = 10
+                        }
+                    }
+                }
+            }
+
+            if ($mode -eq "baseline") {
+                $table.chartSettings.seriesSettings = @{
+                    1 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.Blue[0]
+                            "markerForegroundColor" = $ColorPalette.Blue[0]  
+                        }
+                    2 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.Blue[1]
+                            "markerForegroundColor" = $ColorPalette.Blue[1]  
+                        }
+                    3 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.Blue[2]
+                            "markerForegroundColor" = $ColorPalette.Blue[2]  
+                        }
+                    4 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.Blue[3]
+                            "markerForegroundColor" = $ColorPalette.Blue[3]  
+                        }
+                    5 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.Blue[4]
+                            "markerForegroundColor" = $ColorPalette.Blue[4]  
+                        }
+                    6 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.Blue[5]
+                            "markerForegroundColor" = $ColorPalette.Blue[5]  
+                        }
+                    7 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.Blue[6]
+                            "markerForegroundColor" = $ColorPalette.Blue[6]  
+                        }
+                    8 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.Blue[7]
+                            "markerForegroundColor" = $ColorPalette.Blue[7]  
+                        }
+                    9 = @{ 
+                            "markerBackgroundColor" = $ColorPalette.White
+                            "markerForegroundColor" = $ColorPalette.White
+                            "name" = "" 
+                        }
+                }
+            } else {
+                $table.chartSettings.seriesSettings = @{
+                    1 = @{
+                            "markerStyle"           = [Excel.XlMarkerStyle]::xlMarkerStyleCircle
+                            "markerBackgroundColor" = $ColorPalette.Blue[8]
+                            "markerForegroundColor" = $ColorPalette.Blue[6]
+                            "name"                  = "$Prop Sample"
+                        }
+                }
+            }
+
+            # Add row labels and fill data in table
+            $i   = 0
+            $row = 0
+
+            if ($SubSampleRate -gt 0) { 
+                $finished = $false
+                while (-Not $finished) {
+                    [Array]$segmentData = @()
+                    foreach ($entry in $data) {
+                        if ($entry.$Prop.GetType().Name -ne "Object[]") {
+                            continue
+                        }
+                        if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and `
+                                ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey)) -and `
+                                    ($i * $SubSampleRate -lt $entry.$Prop.Count)) {
+                            $finalIdx = (($i + 1) * $SubSampleRate) - 1
+                            if (((($i + 1) * $SubSampleRate) - 1) -ge $entry.$Prop.Count) {
+                                $finalIdx = $entry.$Prop.Count - 1
+                            }
+                            $segmentData += $entry.$Prop[($i * $SubSampleRate) .. $finalIdx]
+                        }
+                    }
+                    $segmentData = $segmentData | Sort
+                    $time        = $i * $subSampleRate
+                    
+                    if($segmentData.COunt -eq 0) {
+                        $finished = $true
+                        continue
+                    }
+
+                    $table.rows."Data Point".$row = $row 
+                    $table.data.$tableTitle.""."Time Segment"."Data Point".$row       = @{"value" = $time}
+                    $table.data.$tableTitle.$Prop."max"."Data Point".$row = @{"value" = $segmentData[-1]}
+                    $table.data.$tableTitle.$Prop."p999"."Data Point".$row = @{"value" = $segmentData[[int](0.999 * ($segmentData.Count - 1))]}
+                    $table.data.$tableTitle.$Prop."p99"."Data Point".$row = @{"value" = $segmentData[[int](0.99 * ($segmentData.Count - 1))]}
+                    $table.data.$tableTitle.$Prop."p90"."Data Point".$row = @{"value" = $segmentData[[int](0.90 * ($segmentData.Count - 1))]}
+                    $table.data.$tableTitle.$Prop."p75"."Data Point".$row = @{"value" = $segmentData[[int](0.75 * ($segmentData.Count - 1))]}
+                    $table.data.$tableTitle.$Prop."p50"."Data Point".$row = @{"value" = $segmentData[[int](0.50 * ($segmentData.Count - 1))]}
+                    $table.data.$tableTitle.$Prop."p25"."Data Point".$row = @{"value" = $segmentData[[int](0.25 * ($segmentData.Count - 1))]}
+                    $table.data.$tableTitle.$Prop."p10"."Data Point".$row = @{"value" = $segmentData[[int](0.1 * ($segmentData.Count - 1))]}
+                    $table.data.$tableTitle.$Prop."min"."Data Point".$row = @{"value" = $segmentData[0]}
+                    $i++
+                    $row++
+
+                    Write-Progress -Activity "Formatting Tables" -Status "Distribution Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
+
+                }
+            } else {
+                $finished = $false
+                while (-not $finished) { 
+                    [Array]$segmentData = @()
+                    foreach ($entry in $data) {
+                        if ($entry.$prop.GetType().Name -ne "Object[]") {
+                            continue
+                        }
+                        if (((-not $innerPivot) -or ($entry.$innerPivot -eq $IPivotKey)) -and ((-not $outerPivot) -or ($entry.$outerPivot -eq $OPivotKey))) {
+                            if ($null -eq $entry[$Prop][$i]) {
+                                continue
+                            } 
+                            $segmentData += $entry[$Prop][$i]
+                        }
+                    }
+                    
+                    $finished = ($segmentData.Count -eq 0) 
+                    foreach ($sample in $segmentData) {
+                        $table.rows."Data Point".$row = $row
+                        $table.data.$tableTitle."Time Segment"."Data Point".$row = @{"value" = $i}
+                        $table.data.$tableTitle.$Prop."Data Point".$row          = @{"value" = $sample}
+                        $row++
+                        $table.meta.numWrites += 1
+                    }
+                    $i++
+                    Write-Progress -Activity "Formatting Tables" -Status "Distribution Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
+
+                }
+            }
+            $table.meta.dataWidth     = Get-TreeWidth $table.cols
+            $table.meta.colLabelDepth = Get-TreeDepth $table.cols
+            $table.meta.dataHeight    = Get-TreeWidth $table.rows
+            $table.meta.rowLabelDepth = Get-TreeDepth $table.rows
+            $table.meta.numWrites += $table.meta.dataHeight * $table.meta.dataWidth 
+            if (-not $NoNewWorksheets) {
+                if ($modes.Count -gt 1) {
+                    if ($mode -eq "baseline") {
+                        $worksheetName = Get-WorksheetTitle -BaseName "Base Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey -Prop $Prop
+                    } 
+                    else {
+                        $worksheetName = Get-WorksheetTitle -BaseName "Test Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey -Prop $Prop
+                    } 
+                } 
+                else {
+                    $worksheetName = Get-WorksheetTitle -BaseName "Distr." -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey -Prop $Prop
+                } 
+                $tables += $worksheetName
+            }
+
+            $tables += $table
+        }
+    }
+    
+    Write-Progress -Activity "Formatting Tables" -Status "Distribution Table" -Id 3 -PercentComplete 100
+
+    return $tables
+}
 
 <#
 .SYNOPSIS 
