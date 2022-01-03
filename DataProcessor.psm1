@@ -218,7 +218,7 @@ function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPi
         Merge-Histograms -DataObj $DataObj -Histogram $DataEntry.$Property -Property $Property -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $Mode
     } 
     elseif ($DataEntry.ContainsKey($Property)){
-        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData)) {
+        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.ContainsKey("orderedData"))) {
             $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
         }
         $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $DataEntry.$Property

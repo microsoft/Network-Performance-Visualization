@@ -155,7 +155,27 @@ function Get-RawData {
     if ($Tool -in @("CTStraffic", "NTTTCP")) {
         if ($PathCosts.Count -gt 0) {
             # This can be expanded to include the other metrics captured by the pathcosts tool
-            Incorporate-PathCosts -Data $output.data -PathCosts $PathCosts 
+            Incorporate-PathCosts -Data $output.data -PathCosts $PathCosts   
+
+            $output.meta.props += "total root VP utilization"
+            $output.meta.goal["total root VP utilization"] = "decrease"
+            $output.meta.format["total root VP utilization"] = "0.00"
+            $output.meta.units["total root VP utilization"] = "% Utilization"
+
+            $output.meta.props += "vSwitch root VP utilization"
+            $output.meta.goal["vSwitch root VP utilization"] = "decrease"
+            $output.meta.format["vSwitch root VP utilization"] = "0.00"
+            $output.meta.units["vSwitch root VP utilization"] = "% Utilization"
+
+            $output.meta.props += "cpu utlization"
+            $output.meta.goal["cpu utlization"] = "decrease"
+            $output.meta.format["cpu utlization"] = "0.00"
+            $output.meta.units["cpu utlization"] = "% Utilization"
+
+            $output.meta.props += "cycles/packet"
+            $output.meta.goal["cycles/packet"] = "decrease"
+            $output.meta.format["cycles/packet"] = "0.00"
+
             $output.meta.props += "cycles/byte"
             $output.meta.goal["cycles/byte"] = "decrease"
             $output.meta.format["cycles/byte"] = "0.00"
@@ -191,6 +211,11 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
         if ($PathCosts.ContainsKey($file)) {
             
             $cpb = $PathCosts[$file]["Byte path cost (cycles/byte)"]
+            $cpu = $PathCosts[$file]["CPU Utilization"]
+            $cpp = $PathCosts[$file]["Packet path cost (cycles/packet)"]
+            $trvp = $PathCosts[$file]["Total Root VP Utilization"]
+            $vsrvp = $PathCosts[$file]["vSwitch Root VP Utilization"]
+
 
             # TPUT measures from dedicated tools are more reliable than vswitch counters 
             # (which sometimes return 0 erroneously), thus we perform the cycles/byte calculation
@@ -206,7 +231,11 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
             if ($cpb -lt 1000) {
                 $entry["cycles/byte"] = $cpb 
             } 
-            
+
+            $entry["cycles/packet"] = $cpp
+            $entry["cpu utlization"] = $cpu
+            $entry["total root VP utilization"] = $trvp
+            $entry["vSwitch root VP utilization"] = $vsrvp
             
         }
     }
