@@ -140,16 +140,14 @@ function Get-RawData {
     $OuterPivotKeys = @{}
 
     $id = if ($Mode -eq "Baseline") {0} else {1}
-    $output.data = [Array]@() 
-    $numPathCosts = 0
+    $output.data = [Array]@()  
     for($i = 0; $i -lt $files.Count; $i++) { 
         Write-Progress -Activity "Parsing $($Mode) Data Files..." -Status "Parsing..." -Id $id -PercentComplete (100 * (($i) / $files.Count))
         $output.data += , (& $parseFunc -FileName $files[$i].FullName -InnerPivot $InnerPivot -OuterPivot $OuterPivot `
-                            -InnerPivotKeys $InnerPivotKeys  -OuterPivotKeys $OuterPivotKeys -PathCosts $PathCosts) 
-        if ($PathCosts.Count -ne $numPathCosts) {
-            $output.data = $output.data[0..($output.Count - 1)]
-            $numPathCosts = $PathCosts.Count
-        }
+                            -InnerPivotKeys $InnerPivotKeys  -OuterPivotKeys $OuterPivotKeys -PathCosts $PathCosts)
+        if (-not $output.data[-1]) {
+            $output.data = $output.data[0..($output.data.Count - 1)] 
+        } 
     }
 
     if ($Tool -in @("CTStraffic", "NTTTCP")) {
@@ -310,10 +308,17 @@ function Extract-PathCosts ($Filename, $PathCosts) {
     (Get-Content -Path $Filename | ConvertFrom-Json).psobject.properties | Foreach {
         $key = $_.Name     
         $values = @{}
-        ($_.Value).psobject.properties | Foreach {
-            $values[$_.Name] = [Decimal]$_.Value 
+        $obj = $_.Value 
+        if ($_.Value[1]) {
+            $obj = $_.Value[1]
+        }
+        $obj.psobject.properties | Foreach {
+            try {
+                $values[$_.Name] = [Decimal]$_.Value 
+            } catch {}
         }
         $PathCosts[$key] = $values
+        
     }
 }
  

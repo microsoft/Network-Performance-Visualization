@@ -200,6 +200,9 @@ function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPi
     $iPivotKey = if ($InnerPivot) {$DataEntry.$InnerPivot} else {""}
     $oPivotKey = if ($OuterPivot) {$DataEntry.$OuterPivot} else {""}
 
+    if (-not $DataEntry.ContainsKey($Property)) { return }
+    if ($null -eq $DataEntry.$Property) { return }
+
     if (-not ($DataObj.data.Keys -contains $oPivotKey)) {
         $DataObj.data.$oPivotKey = @{}
     }
@@ -214,15 +217,14 @@ function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPi
     }
 
 
-    if ($DataEntry.ContainsKey($Property) -and $DataEntry.$Property.GetType().Name -eq "Hashtable") { # $Item.$Property should be $DataEntry.$Property?
+    if ($DataEntry.$Property.GetType().Name -eq "Hashtable") { # $Item.$Property should be $DataEntry.$Property?
         Merge-Histograms -DataObj $DataObj -Histogram $DataEntry.$Property -Property $Property -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $Mode
     } 
-    elseif ($DataEntry.ContainsKey($Property)){
-        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.ContainsKey("orderedData"))) {
-            $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
-        }
-        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $DataEntry.$Property
+    if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.ContainsKey("orderedData"))) {
+        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
     }
+    $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $DataEntry.$Property
+    
 }
 
 <#

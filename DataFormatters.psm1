@@ -508,7 +508,7 @@ function Format-Stats {
             }
 
             # Add row labels and fill data in table
-            $cellRow = $nextRow
+            #$cellRow = $nextRow
             
             if ($data.$OPivotKey.$prop.$IPivotKey.baseline.stats) {$metrics = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.Keys}
             else {$metrics = $data.$OPivotKey.$prop.$IPivotKey.test.stats.keys}
@@ -531,8 +531,8 @@ function Format-Stats {
                     }
 
                     if ($data.$OPivotKey.$prop.$IPivotKey.baseline.stats -and $data.$OPivotKey.$prop.$IPivotKey.test.stats) {
-                        $baseCell = "$(Get-ColName ($col - 1))$cellRow"
-                        $testCell = "$(Get-ColName ($col + 1))$cellRow"
+                        $baseCell = "$(Get-ColName ($col - 1))$nextRow"
+                        $testCell = "$(Get-ColName ($col + 1))$nextRow"
 
                         $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/ABS($baseCell))"}
                         
@@ -558,10 +558,11 @@ function Format-Stats {
                     Write-Progress -Activity "Formatting Tables" -Status "Stats Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
 
                 }
-                $cellRow += 1
+                $nextRow += 1
+                #$cellRow += 1
             } # foreach $metric
         }
-        $nextRow += $cellRow
+        $nextRow += $HeaderRows + 1
 
         $table.meta.dataWidth     = Get-TreeWidth $table.cols
         $table.meta.colLabelDepth = Get-TreeDepth $table.cols
@@ -1417,9 +1418,9 @@ function Get-HistogramTemplate {
             "delete" = $true # don't plot % change
         }
         $table.chartSettings.seriesSettings[3] = @{
-            "color"      = $ColorPalette.blue[2]
+            "color"      = $ColorPalette.orange[2]
             "name"       = "Test"
-            "lineWeight" = 3
+            "lineWeight" = 1
         }
 
         $table.meta.columnFormats = @("0.0%", "0.0%", "0.0%")
