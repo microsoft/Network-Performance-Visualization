@@ -358,11 +358,17 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
 
     $throughput = [Array]@()
     $warmupPadding = 2
+    $dynamicWarmup = $true
     $cooldownPadding = 2
 
     for ($i = $warmupPadding; $i -lt $data.Count - $cooldownPadding; $i += 1) { 
 
         $tputVal = ($data[$i].SendBps, $data[$i].RecvBps | Measure-Object -Maximum).Maximum
+        if ($tputVal -eq 0 -and $dynamicWarmup) {
+            continue
+        } else {
+            $dynamicWarmup = $false
+        }
         $throughput += [Decimal] $tputVal * $bytesToGigabits
     }  #($data.SendBps | measure -Average).Average * $bytesToGigabits
 

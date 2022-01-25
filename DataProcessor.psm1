@@ -219,11 +219,13 @@ function Place-DataEntry ($DataObj, $DataEntry, $Property, $InnerPivot, $OuterPi
 
     if ($DataEntry.$Property.GetType().Name -eq "Hashtable") { # $Item.$Property should be $DataEntry.$Property?
         Merge-Histograms -DataObj $DataObj -Histogram $DataEntry.$Property -Property $Property -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $Mode
-    } 
-    if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.ContainsKey("orderedData"))) {
-        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
+    } else {
+        if (-not ($DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.ContainsKey("orderedData"))) {
+            $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData = [Array] @()
+        }
+        $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $DataEntry.$Property
     }
-    $DataObj.data.$oPivotKey.$Property.$iPivotKey.$Mode.orderedData += $DataEntry.$Property
+    
     
 }
 
