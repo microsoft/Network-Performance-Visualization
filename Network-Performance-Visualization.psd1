@@ -12,7 +12,7 @@
 RootModule = 'Network-Performance-Visualization.psm1'
 
 # Version number of this module.
-ModuleVersion = '2021.11.09.11'
+ModuleVersion = '2022.1.25.12'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
