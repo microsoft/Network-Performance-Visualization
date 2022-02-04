@@ -4,7 +4,7 @@ $CTSPivots = @("sessions", "none")
 $CPSPivots = @("none")
 $LagScopePivots = @("protocol", "none")
 
-
+ 
 
 #
 # Define atrribute that dynamically tab completes pivot params.

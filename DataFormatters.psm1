@@ -534,7 +534,7 @@ function Format-Stats {
                         $baseCell = "$(Get-ColName ($col - 1))$nextRow"
                         $testCell = "$(Get-ColName ($col + 1))$nextRow"
 
-                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/ABS($baseCell))"}
+                        $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric = @{"value" = "=IF([col-1][row]=0, `"--`", ([col+1][row]-[col-1][row])/ABS([col-1][row]))"}
                         
                         $params = @{
                             "Cell"    = $table.data.$tableTitle.$innerPivot.$IPivotKey."% change".$prop.$metric
@@ -1260,7 +1260,7 @@ function Format-Percentiles {
                         $table.data.$tableTitle.$prop.test.percentiles[$percentile]       = @{"value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles.$percentile}
                     }
                     if ($data.$OPivotKey.$prop.$IPivotKey.ContainsKey("baseline") -and $data.$OPivotKey.$prop.$IPivotKey.ContainsKey("test")) {
-                        $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/ABS($baseCell))"}
+                        $table.data.$tableTitle.$prop."% change".percentiles[$percentile] = @{"value" = "=IF([col-1][row]=0, `"--`", ([col+1][row]-[col-1][row])/ABS([col-1][row]))"}
                         $params = @{
                             "Cell"    = $table.data.$tableTitle.$prop."% change".percentiles[$percentile]
                             "TestVal" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[$percentile]
@@ -1491,7 +1491,7 @@ function Format-Histogram {
                     if ($data.baseline.histogram -and $data.test.histogram) {
                         $baseCell = "C$($row + $HeaderRows)"
                         $testCell = "E$($row + $HeaderRows)"
-                        $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = @{"value" = "=IF($baseCell=0, ""--"", ($testCell-$baseCell)/ABS($baseCell))"}
+                        $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = @{"value" = "=IF([col-1][row]=0, `"--`", ([col+1][row]-[col-1][row])/ABS([col-1][row]))"}
                         $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] = Set-CellColor -Cell $table.data.$tableTitle.$prop."% change"."histogram buckets"[$bucket] -BaseVal $baseVal -TestVal $testVal -Goal "increase"
                     }
                 }

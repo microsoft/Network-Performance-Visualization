@@ -329,12 +329,58 @@ function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings, [ref]$iter, $numIters
     }
 
     if ($null -ne $CellSettings.value) {
-        $cellValue = $CellSettings.value -Replace "<.*>", ""
+        $cellValue = $CellSettings.value -Replace "<.*>", "" 
+        if ($CellSettings.value.GetType().Name -eq "String") {
+            $cellValue = $cellValue.Replace("[row]", "$row")
+            $cellValue = $cellValue.Replace("[col-1]", "$(Get-CellCol ($col - 1))")
+            $cellValue = $cellValue.Replace("[col+1]", "$(Get-CellCol ($col + 1))")
+        }
         $Worksheet.Cells.Item($Row, $Col) = $cellvalue
     }
 
     Write-Progress -Activity "Creating Excel File" -Id 4 -PercentComplete (100 * (($iter.Value++) / $numIters))
 }
+
+##
+# Fill-Cell
+# ---------
+# This function converts a column number to a letter based column label:
+#
+# 1 = A
+# 2 = B
+# ...
+# 26 = Z
+# 27 = AA
+# 28 = AB
+# ...
+#
+# Parameters
+# ---------- 
+# Col (int) - Column index to get label for
+#
+# Return
+# ------
+# Column label (string)
+#
+##
+function Get-CellCol ($Col) { 
+    $ColStr = ""
+    $curNum = $Col - 1
+    $letters = @("A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z")
+    $digit = 0 
+    $raised = [Math]::Pow(26, $digit)
+    while ((($curNum / $raised) -ge 1) -or ($digit -eq 0)) {
+        $digitVal = ([Math]::floor($curNum / $raised)) % 26
+        if ($digit -gt 0) {
+            $digitVal -= 1
+        }
+        $ColStr = $letters[$digitVal] + $ColStr
+        $digit += 1
+        $raised = [Math]::Pow(26, $digit)
+    }
+    return $ColStr
+
+} 
 
 ##
 # Merge-Cells

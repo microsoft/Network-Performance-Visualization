@@ -359,6 +359,7 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
     $throughput = [Array]@()
     $warmupPadding = 2
     $dynamicWarmup = $true
+    $dynamicCooldown = $true 
     $cooldownPadding = 2
 
     for ($i = $warmupPadding; $i -lt $data.Count - $cooldownPadding; $i += 1) { 
@@ -372,10 +373,22 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
         $throughput += [Decimal] $tputVal * $bytesToGigabits
     }  #($data.SendBps | measure -Average).Average * $bytesToGigabits
 
-    $maxSessions = ($data."In-Flight" | measure -Max).Maximum
+    if ($dynamicCooldown) {
+        for ($j = $throughput.Length - 1; $j -ge 0; $j -= 1) {
+            if ($throughput[$j] -eq 0) {
+                $throughput = $throughput[0..($j-1)] 
+            } else {
+                break
+            }
+        }
+    }
 
+    $maxSessions = ($data."In-Flight" | measure -Max).Maximum
+    $fileSplit = $Filename.Split("\")[-1]
+    $fileSplit = $fileSplit.Split("/")[-1]
+    $sessionsStr = $fileSplit.Split(".")[2]
     $dataEntry = @{
-        "sessions"   = $maxSessions
+        "sessions"   = [Int] $sessionsStr.Substring(1)
         "throughput" = $throughput
         "filename"   = $Filename
     }
