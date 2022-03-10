@@ -28,68 +28,75 @@ function Create-ExcelFile {
         [String] $SavePath
     )
  
+    try {
+        $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
 
-    $excelObject = New-Object -ComObject Excel.Application -ErrorAction Stop
+        # Can be set to true for debugging purposes
+        $excelObject.Visible = $false
 
-    # Can be set to true for debugging purposes
-    $excelObject.Visible = $false
+        $workbookObject = $excelObject.Workbooks.Add()
+        $worksheetObject = $workbookObject.Worksheets.Item(1)
 
-    $workbookObject = $excelObject.Workbooks.Add()
-    $worksheetObject = $workbookObject.Worksheets.Item(1)
+        $numIters = [Int]0
+        foreach ($table in $Tables) {
+            if ($table.GetType().Name -eq "Boolean") {continue} # Booleans get unwantedly added to list of tables for some reason
+            if ($table.GetType().Name -eq "string") {continue} 
+            $numIters = $numIters + $table.meta.numWrites
+        }
+        $iter = [ref]0
 
-    $numIters = [Int]0
-    foreach ($table in $Tables) {
-        if ($table.GetType().Name -eq "Boolean") {continue} # Booleans get unwantedly added to list of tables for some reason
-        if ($table.GetType().Name -eq "string") {continue} 
-        $numIters = $numIters + $table.meta.numWrites
-    }
-    $iter = [ref]0
-
-    $rowOffset = 1
-    $chartNum  = 1
-    $first = $true
-    foreach ($table in $Tables) {
-        if ($table.GetType().Name -eq "Boolean") {continue} # Booleans get unwantedly added to list of tables for some reason
-        if ($table.GetType().Name -eq "string") {  
-            if ($first) {
-                $first = $false
+        $rowOffset = 1
+        $chartNum  = 1
+        $first = $true
+        foreach ($table in $Tables) {
+            if ($table.GetType().Name -eq "Boolean") {continue} # Booleans get unwantedly added to list of tables for some reason
+            if ($table.GetType().Name -eq "string") {  
+                if ($first) {
+                    $first = $false
+                } 
+                else {
+                    Fit-Cells -Worksheet $worksheetObject 
+                    $worksheetObject = $workbookObject.worksheets.Add()
+                }
+                $worksheetObject.Name = $table
+                $chartNum = 1
+                $rowOffset = 1
+                continue
             } 
-            else {
-                Fit-Cells -Worksheet $worksheetObject 
-                $worksheetObject = $workbookObject.worksheets.Add()
-            }
-            $worksheetObject.Name = $table
-            $chartNum = 1
-            $rowOffset = 1
-            continue
-        } 
-        $null = Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) `
-                                -row $rowOffset -iter $iter -numIters $numIters
-        $null = Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) `
-                                -col 1 -iter $iter -numIters $numIters
-        $null = Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows `
-                                -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset) `
-                                -iter $iter -numIters $numIters
-        
-        if ($table.chartSettings) { 
-            $null = Create-Chart -Worksheet $worksheetObject -Table $table -StartCol 1 -StartRow $rowOffset -chartNum $chartNum
-            $chartNum += 1
-        } 
-        Format-ExcelSheet -Worksheet $worksheetObject -Table $table -RowOffset $rowOffset
-        $rowOffset += $table.meta.colLabelDepth + $table.meta.dataHeight + 1
+            $null = Fill-ColLabels -Worksheet $worksheetObject -cols $table.cols -startCol ($table.meta.rowLabelDepth + 1) `
+                                    -row $rowOffset -iter $iter -numIters $numIters
+            $null = Fill-RowLabels -Worksheet $worksheetObject -rows $table.rows -startRow ($table.meta.colLabelDepth + $rowOffset) `
+                                    -col 1 -iter $iter -numIters $numIters
+            $null = Fill-Data -Worksheet $worksheetObject -Data $table.data -Cols $table.cols -Rows $table.rows `
+                                    -StartCol ($table.meta.rowLabelDepth + 1) -StartRow ($table.meta.colLabelDepth + $rowOffset) `
+                                    -iter $iter -numIters $numIters
+            
+            if ($table.chartSettings) { 
+                $null = Create-Chart -Worksheet $worksheetObject -Table $table -StartCol 1 -StartRow $rowOffset -chartNum $chartNum
+                $chartNum += 1
+            } 
+            Format-ExcelSheet -Worksheet $worksheetObject -Table $table -RowOffset $rowOffset
+            $rowOffset += $table.meta.colLabelDepth + $table.meta.dataHeight + 1
+        }
+
+        Fit-Cells -Worksheet $worksheetObject
+        Write-Progress -Activity "Creating Excel File" -Status "Done" -Id 4 -PercentComplete 100
+    } catch {
+        Write-Warning "Exception $($_.Exception.Message) in $($MyInvocation.MyCommand.Name)"
+    } finally {
+        if ($null -ne $workbookObject) {
+            $null = $workbookObject.SaveAs($SavePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook)
+            $workbookObject.Saved = $true
+            $null = $workbookObject.Close()
+            $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject)
+        }
+        if ($null -ne $excelObject) {
+            $null = $excelObject.Quit()
+            $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObject)
+            $null = [System.GC]::Collect()
+            $null = [System.GC]::WaitForPendingFinalizers()
+        }
     }
-
-    Fit-Cells -Worksheet $worksheetObject
-    Write-Progress -Activity "Creating Excel File" -Status "Done" -Id 4 -PercentComplete 100
-    $null = $workbookObject.SaveAs($SavePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook)
-    $workbookObject.Saved = $true
-    $null = $workbookObject.Close()
-    $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject)
-
-    $null = $excelObject.Quit()
-    $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObject)
-    $null = [System.GC]::Collect()
-    $null = [System.GC]::WaitForPendingFinalizers()
 }
 
 
