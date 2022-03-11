@@ -407,10 +407,10 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
     $bytesToGigabits = [Decimal] 8 / (1000 * 1000 * 1000)
 
     $throughput = [Array]@()
-    $warmupPadding = 5
+    $warmupPadding = 2
     $dynamicWarmup = $true
     $dynamicCooldown = $true 
-    $cooldownPadding = 5
+    $cooldownPadding = 2
 
     for ($i = $warmupPadding; $i -lt $data.Count - $cooldownPadding; $i += 1) { 
 

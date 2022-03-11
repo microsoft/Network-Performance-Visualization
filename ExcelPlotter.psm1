@@ -94,7 +94,6 @@ function Create-ExcelFile {
             $workbookObject.Saved = $true
             $null = $workbookObject.Close()
             $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject)
-            Remove-Variable $workbookObject
 
         }
         if ($null -ne $excelObject) {
