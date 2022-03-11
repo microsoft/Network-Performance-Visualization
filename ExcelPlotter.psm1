@@ -85,16 +85,23 @@ function Create-ExcelFile {
         Write-Warning "Exception $($_.Exception.Message) in $($MyInvocation.MyCommand.Name)"
     } finally {
         if ($null -ne $workbookObject) {
-            $null = $workbookObject.SaveAs($SavePath, [Excel.XlFileFormat]::xlOpenXMLWorkbook)
+            try {
+                $null = $workbookObject.SaveAs($SavePath, [Excel.XlFileFormat]::xlWorkbookDefault)
+            } catch {
+                Write-Host $_
+            }
+            
             $workbookObject.Saved = $true
             $null = $workbookObject.Close()
             $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject)
+            Remove-Variable $workbookObject
+
         }
         if ($null -ne $excelObject) {
             $null = $excelObject.Quit()
             $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excelObject)
             $null = [System.GC]::Collect()
-            $null = [System.GC]::WaitForPendingFinalizers()
+            $null = [System.GC]::WaitForPendingFinalizers() 
         }
     }
 }

@@ -21,12 +21,25 @@
 ##
 function Process-Data {
     param (
-        [Parameter(Mandatory=$true)] [PSobject[]] $BaselineRawData,
-        [Parameter()] [PSobject[]] $TestRawData,
-        [Parameter()] [String] $InnerPivot,
-        [Parameter()] [String] $OuterPivot
-    )
+        [Parameter(Mandatory=$true)] 
+        [PSobject[]] $BaselineRawData,
 
+        [Parameter()] 
+        [PSobject[]] $TestRawData,
+
+        [Parameter()] 
+        [String] $InnerPivot,
+
+        [Parameter()] 
+        [String] $OuterPivot,
+
+        [Parameter()]  
+        [AllowNull()] 
+        [Int] $NumHistogramBuckets
+    )
+    if ($NumHistogramBuckets -eq $null) {
+        $NumHistogramBuckets = 50
+    }
     $meta = $BaselineRawData.meta
     if ($TestRawData) {
         $meta = Merge-MetaData -BaselineMeta $BaselineRawData.meta -TestMeta $TestRawData.meta
@@ -88,12 +101,12 @@ function Process-Data {
                 foreach ($mode in $modes) {
                     if (-not $processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.percentiles -and `
                             $processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram) {
-                        Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
+                        Percentiles-FromHistogram -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode 
                     } 
                     
                     if (-not $processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.histogram -and `
                             $processedDataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.orderedData ) {
-                        Histogram-FromOrderedData -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode
+                        Histogram-FromOrderedData -DataObj $processedDataObj -Property $prop -IPivotKey $iPivotKey -OPivotKey $oPivotKey -Mode $mode -NumBuckets $NumHistogramBuckets
                     }
 
                     Write-Progress -Activity "Processing Raw Data..." -Status "Processing..." -Id 2 -PercentComplete (100 * (($i++) / $totalIters))
@@ -107,17 +120,12 @@ function Process-Data {
 
 function Merge-MetaData ($BaselineMeta, $TestMeta) {
     $BaselineMeta.comparison = $true
-    foreach ($innerPivotKey in $TestMeta.innerPivotKeys) {
-        if (-Not $BaselineMeta.innerPivotKeys -Contains $innerPivotKey) {
-            $BaselineMeta.innerPivotKeys += $innerPivotKey
-        }
-    }
 
-    foreach ($outerPivotKey in $TestMeta.outerPivotKeys) {
-        if (-Not $BaselineMeta.outerPivotKeys -Contains $outerPivotKey) {
-            $BaselineMeta.outerPivotKeys += $outerPivotKey
-        }
-    }
+    $BaselineMeta.props = $BaselineMeta.props | ?{$TestMeta.props -contains $_} 
+
+    # Keep only the intersection of pivot keys between the two datasets 
+    $BaselineMeta.innerPivotKeys = $BaselineMeta.innerPivotKeys | ?{$TestMeta.innerPivotKeys -contains $_} 
+    $BaselineMeta.outerPivotKeys = $BaselineMeta.outerPivotKeys | ?{$TestMeta.outerPivotKeys -contains $_}  
     return $BaselineMeta
 }
 function Invert-Mode($Mode) {
@@ -128,7 +136,7 @@ function Invert-Mode($Mode) {
     }
 }
 
-function Histogram-FromOrderedData ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode, $NumBuckets = 5) {
+function Histogram-FromOrderedData ($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode, $NumBuckets = 50) {
     $DataObj.data.$OPivotKey.$Property.$IPivotKey.$Mode.histogram = @{}
 
     
@@ -258,11 +266,15 @@ function Add-OrderedDataStats($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode
     $stat = ($dataModel.orderedData | measure -Sum -Average -Maximum -Minimum)
     $n = $stat.Count
 
+    if ($n -eq 0) {return}
+
     $variance = ($dataModel.orderedData | foreach {[Math]::Pow($_ - $stat.Average, 2)} | measure -Average).Average
     $stdDev = [Math]::Sqrt($variance)
 
+
+
     $dataModel.stats = [Ordered]@{
-        "n"    = $n
+        "n"        = $n
         "sum"      = $stat.Sum
         "mean"     = $stat.Average
         "median"   = if ($n % 2) {$dataModel.orderedData[[Math]::Floor($n / 2)]} else {0.50 * ($dataModel.orderedData[$n / 2] + $dataModel.orderedData[($n / 2) - 1])}
@@ -275,7 +287,7 @@ function Add-OrderedDataStats($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode
         "std err"  = $stdDev / [Math]::Sqrt($n)
     }
 
-    if ($n -gt 3) {
+    if (($n -gt 3) -and ($stdDev -ne 0)) {
         $s1 = $n / (($n - 1) * ($n - 2))
         $k1 = $s1 * (($n + 1) / ($n - 3))
         $k2 = 3 * ((($n - 1) * ($n - 1)) / (($n - 2) * ($n - 3)))

@@ -135,7 +135,11 @@ function Get-RawData {
         }
     } 
 
-    $PathCosts = @{}
+    $PathCosts = @{
+        "meta" = @{
+            "props" = @()
+        }
+    }
     $InnerPivotKeys = @{}
     $OuterPivotKeys = @{}
 
@@ -155,28 +159,50 @@ function Get-RawData {
             # This can be expanded to include the other metrics captured by the pathcosts tool
             Incorporate-PathCosts -Data $output.data -PathCosts $PathCosts   
 
-            $output.meta.props += "total root VP utilization"
-            $output.meta.goal["total root VP utilization"] = "decrease"
-            $output.meta.format["total root VP utilization"] = "0.00"
-            $output.meta.units["total root VP utilization"] = "% Utilization"
+            if ($PathCosts.meta.props -contains "total root VP utilization") {
+                $output.meta.props += "total root VP utilization"
+                $output.meta.goal["total root VP utilization"] = "decrease"
+                $output.meta.format["total root VP utilization"] = "0.00"
+                $output.meta.units["total root VP utilization"] = "% Utilization"
+            }
+            
+            if ($PathCosts.meta.props -contains "vSwitch root VP utilization") {
+                $output.meta.props += "vSwitch root VP utilization"
+                $output.meta.goal["vSwitch root VP utilization"] = "decrease"
+                $output.meta.format["vSwitch root VP utilization"] = "0.00"
+                $output.meta.units["vSwitch root VP utilization"] = "% Utilization"
+            }
 
-            $output.meta.props += "vSwitch root VP utilization"
-            $output.meta.goal["vSwitch root VP utilization"] = "decrease"
-            $output.meta.format["vSwitch root VP utilization"] = "0.00"
-            $output.meta.units["vSwitch root VP utilization"] = "% Utilization"
+            if ($PathCosts.meta.props -contains "cpu utlization") { 
+                $output.meta.props += "cpu utlization"
+                $output.meta.goal["cpu utlization"] = "decrease"
+                $output.meta.format["cpu utlization"] = "0.00"
+                $output.meta.units["cpu utlization"] = "% Utilization"
+            }
 
-            $output.meta.props += "cpu utlization"
-            $output.meta.goal["cpu utlization"] = "decrease"
-            $output.meta.format["cpu utlization"] = "0.00"
-            $output.meta.units["cpu utlization"] = "% Utilization"
+            if ($PathCosts.meta.props -contains "cycles/packet") { 
+                $output.meta.props += "cycles/packet"
+                $output.meta.goal["cycles/packet"] = "decrease"
+                $output.meta.format["cycles/packet"] = "0.00"
+            }
 
-            $output.meta.props += "cycles/packet"
-            $output.meta.goal["cycles/packet"] = "decrease"
-            $output.meta.format["cycles/packet"] = "0.00"
+            if ($PathCosts.meta.props -contains "cycles/byte") { 
+                $output.meta.props += "cycles/byte"
+                $output.meta.goal["cycles/byte"] = "decrease"
+                $output.meta.format["cycles/byte"] = "0.00"
+            }
 
-            $output.meta.props += "cycles/byte"
-            $output.meta.goal["cycles/byte"] = "decrease"
-            $output.meta.format["cycles/byte"] = "0.00"
+            if ($PathCosts.meta.props -contains "RSS Core Utilization") { 
+                $output.meta.props += "RSS Core Utilization"
+                $output.meta.goal["RSS Core Utilization"] = "decrease"
+                $output.meta.format["RSS Core Utilization"] = "0.00"
+            }
+
+            if ($PathCosts.meta.props -contains "UVMS Data Core Utilization") { 
+                $output.meta.props += "UVMS Data Core Utilization"
+                $output.meta.goal["UVMS Data Core Utilization"] = "decrease"
+                $output.meta.format["UVMS Data Core Utilization"] = "0.00"
+            }
         }
         
     }
@@ -184,7 +210,7 @@ function Get-RawData {
     Write-Progress -Activity "Parsing $($Mode) Data Files..." -Status "Done" -Id $id -PercentComplete 100
  
     if ($output."data".Count -eq 0) {
-        Write-Error "Failed to parse any file in '$DirName'."
+        Write-Error "Failed to parse any files in '$DirName'."
     }
 
     $output.meta.innerPivotKeys = $InnerPivotKeys.Keys 
@@ -213,27 +239,48 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
             $cpp = $PathCosts[$file]["Packet path cost (cycles/packet)"]
             $trvp = $PathCosts[$file]["Total Root VP Utilization"]
             $vsrvp = $PathCosts[$file]["vSwitch Root VP Utilization"]
-
+            $udcu = $PathCosts[$file]["UVMS Data Core Utilization"]
+            $rcu = $PathCosts[$file]["RSS Core Utilization"]
 
             # TPUT measures from dedicated tools are more reliable than vswitch counters 
             # (which sometimes return 0 erroneously), thus we perform the cycles/byte calculation
             # using our own TPUT measures when possible
             if ($PathCosts[$file].ContainsKey("Total CPU cycles used per second")) {
                 $avgTput = ((1000 * 1000 * 1000) / 8) * ($entry["throughput"] | Measure-Object -Average).Average
-                $cpb = $PathCosts[$file]["Total CPU cycles used per second"] / $avgTput
+                if ($avgTput -ne 0) { 
+                    $cpb = $PathCosts[$file]["Total CPU cycles used per second"] / $avgTput
+                }
+
+                if ("cycles/byte" -notin $PathCosts.meta.props) {
+                    $PathCosts.meta.props += "cycles/byte"
+                }
+
             }
-                # Sometimes counters mess up and record nearly-zero for tput and it causes 
-                # cycle/byte calculations to return extremely large numbers. These outliers
-                # make visualizations nearly un-readable, thus we filter outliers here. We 
-                # should look for a more sustainable solution in the future
-            if ($cpb -lt 1000) {
+
+            # Sometimes counters mess up and record nearly-zero for tput and it causes 
+            # cycle/byte calculations to return extremely large numbers. These outliers
+            # make visualizations unusable, thus we filter outliers here. We 
+            # should look for a more sustainable solution in the future
+            
+            if ($cpb -lt 100) {
                 $entry["cycles/byte"] = $cpb 
             } 
+
+            if ($vsrvp -and $vsrvp -le 100) { 
+                $entry["vSwitch root VP utilization"] = $vsrvp
+            }
+
+            if ($udcu) { 
+                $entry["UVMS Data Core Utilization"] = $udcu 
+            }
+
+            if ($rcu) { 
+                $entry["RSS Core Utilization"] = $rcu 
+            }
 
             $entry["cycles/packet"] = $cpp
             $entry["cpu utlization"] = $cpu
             $entry["total root VP utilization"] = $trvp
-            $entry["vSwitch root VP utilization"] = $vsrvp
             
         }
     }
@@ -314,6 +361,9 @@ function Extract-PathCosts ($Filename, $PathCosts) {
         }
         $obj.psobject.properties | Foreach {
             try {
+                if ($_.Name -notin $PathCosts.meta.props) {
+                    $PathCosts.meta.props += $_.Name
+                }
                 $values[$_.Name] = [Decimal]$_.Value 
             } catch {}
         }
@@ -357,10 +407,10 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
     $bytesToGigabits = [Decimal] 8 / (1000 * 1000 * 1000)
 
     $throughput = [Array]@()
-    $warmupPadding = 2
+    $warmupPadding = 5
     $dynamicWarmup = $true
     $dynamicCooldown = $true 
-    $cooldownPadding = 2
+    $cooldownPadding = 5
 
     for ($i = $warmupPadding; $i -lt $data.Count - $cooldownPadding; $i += 1) { 
 
@@ -512,11 +562,24 @@ function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPiv
         return
     }
 
+    if ($FileName -notlike "*.json") {return}
+    
+    $latencies = (Get-Content $Filename | ConvertFrom-Json).latencies 
+    $dataEntry = @{
+        "filename" = $FileName
+        "latency" = [Array] @()
+    }
+
+    for ($i = 0; $i -lt $latencies.Count; $i++) {
+        $dataEntry.latency += @($latencies[$i].latency) * $latencies[$i].frequency
+    }
+
+
+
+    <#
     $file = Get-Content $FileName
 
-    $rawDataEntry = @{
-        "filename" = $FileName
-    }
+    
     $histDataEntry = @{
         "filename" = $Filename
     }
@@ -566,8 +629,9 @@ function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPiv
     if ($histogram.Count -gt 0) {
         $output = @($rawDataEntry, $histDataEntry)
     }
+    #>
 
-    return $output
+    return $dataEntry
 }
  
 

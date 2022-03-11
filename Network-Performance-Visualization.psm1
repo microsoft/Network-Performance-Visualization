@@ -2,7 +2,7 @@ $NTTTCPPivots = @("sessions", "bufferLen", "bufferCount", "none")
 $LATTEPivots = @("protocol", "sendMethod", "none")
 $CTSPivots = @("sessions", "none")
 $CPSPivots = @("none")
-$LagScopePivots = @("protocol", "none")
+$LagScopePivots = @("none")
 
  
 
@@ -70,6 +70,8 @@ function processing_end {
         NTTTCP
         LATTE
         CTStraffic
+        CPS
+        Lagscope
 
     This tool can aggregate data over several iterations of test runs, and can be used to visualize comparisons
     between a baseline and test set of data.
@@ -95,6 +97,8 @@ function processing_end {
         NTTTCP:     sessions, bufferLen, bufferCount, none
         LATTE:      protocol, sendMethod, none
         CTSTraffic: sessions, none
+        LagScope:   protocol, none
+        CPS:        none
     
     The default for all cases is none.
 
@@ -133,11 +137,21 @@ function New-NetworkVisualization {
         [Parameter(Mandatory=$true, ParameterSetName="LagScope")]
         [Switch] $LagScope,
 
+        [Parameter(Mandatory=$false, ParameterSetName="LagScope")]
+        [Parameter(Mandatory=$false, ParameterSetName="LATTE")]
+        [Int] $NumHistogramBuckets = 50,
+
         [Parameter(Mandatory=$true)]
         [String] $BaselineDir, 
 
         [Parameter(Mandatory=$false)]
+        [String] $BaselineDatasetName = $null,
+
+        [Parameter(Mandatory=$false)]
         [String] $TestDir = $null,
+
+        [Parameter(Mandatory=$false)]
+        [String] $TestDatasetName = $null,
 
         [Parameter(Mandatory=$false)]
         [PivotArgumentCompleter()]
@@ -151,11 +165,18 @@ function New-NetworkVisualization {
         [ValidatePattern('[.]*\.xl[txms]+')]
         [String] $SavePath,
 
+        [Parameter(Mandatory=$false)]
+        [Int] $Warmup = 0,
+
+        [Parameter(Mandatory=$false)]
+        [Int] $Cooldown = 0,
+
         [Parameter(Mandatory=$false, ParameterSetName = "LATTE")]
         [Parameter(Mandatory=$false, ParameterSetName = "CPS")]
         [Parameter(Mandatory=$false, ParameterSetName = "LagScope")]
         [Int] $SubsampleRate = -1
     )
+
     $starttime = (Get-Date)
     Clear-Host 
     $ErrorActionPreference = "Stop"
@@ -181,9 +202,17 @@ function New-NetworkVisualization {
     if ($TestDir) {
         $testRaw = Get-RawData -Tool $tool -DirName $TestDir -Mode "Test" -InnerPivot $InnerPivot -OuterPivot $OuterPivot
     } 
-    $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot
- 
-
+    $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot -NumHistogramBuckets $NumHistogramBuckets
+    
+    $processedData.meta.datasetNames = @{}
+    $processedData.meta.datasetNames["baseline"] = "baseline"
+    $processedData.meta.datasetNames["test"] = "test"
+    if ($BaselineDatasetName) {
+        $processedData.meta.datasetNames["baseline"] = $BaselineDatasetName
+    }
+    if ($TestDatasetName) {
+        $processedData.meta.datasetNames["test"] = $TestDatasetName
+    }
 
     $tables = @()
     foreach ($oPivotKey in $processedData.data.Keys) { 
@@ -193,14 +222,15 @@ function New-NetworkVisualization {
             $tables += Format-Quartiles    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
             $tables += Format-MinMaxChart  -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -NoNewWorksheets
         } elseif ($tool -in @("LATTE", "LagScope")) { 
-            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
+            #$tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
+            $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
         } elseif ($tool -in @("CPS")) {
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "conn/s" -SubSampleRate $SubsampleRate
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "close/s" -SubSampleRate $SubsampleRate
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
         }
-        $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
+        #$tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
     } 
     
     
