@@ -196,11 +196,12 @@ function New-NetworkVisualization {
     Add-ExcelTypes 
 
     # Parse Data
-    $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir -InnerPivot $InnerPivot -OuterPivot $OuterPivot
+    $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Warmup $Warmup -Cooldown $Cooldown
+
   
     $testRaw     = $null
     if ($TestDir) {
-        $testRaw = Get-RawData -Tool $tool -DirName $TestDir -Mode "Test" -InnerPivot $InnerPivot -OuterPivot $OuterPivot
+        $testRaw = Get-RawData -Tool $tool -DirName $TestDir -Mode "Test" -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Warmup $Warmup -Cooldown $Cooldown
     } 
     $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot -NumHistogramBuckets $NumHistogramBuckets
     

@@ -20,7 +20,9 @@ function Get-RawData {
         [Parameter()] [String] $Tool,
         [Parameter()] [String] $Mode="Baseline",
         [Parameter()] [String] $InnerPivot,
-        [Parameter()] [String] $OuterPivot
+        [Parameter()] [String] $OuterPivot,
+        [Parameter()] [Int] $Warmup,
+        [Parameter()] [Int] $Cooldown
     )
 
     $output = @{}
@@ -148,7 +150,7 @@ function Get-RawData {
     for($i = 0; $i -lt $files.Count; $i++) { 
         Write-Progress -Activity "Parsing $($Mode) Data Files..." -Status "Parsing..." -Id $id -PercentComplete (100 * (($i) / $files.Count))
         $output.data += , (& $parseFunc -FileName $files[$i].FullName -InnerPivot $InnerPivot -OuterPivot $OuterPivot `
-                            -InnerPivotKeys $InnerPivotKeys  -OuterPivotKeys $OuterPivotKeys -PathCosts $PathCosts)
+                            -InnerPivotKeys $InnerPivotKeys  -OuterPivotKeys $OuterPivotKeys -PathCosts $PathCosts -Warmup $Warmup -Cooldown $Cooldown)
         if (-not $output.data[-1]) {
             $output.data = $output.data[0..($output.data.Count - 1)] 
         } 
@@ -196,12 +198,14 @@ function Get-RawData {
                 $output.meta.props += "RSS Core Utilization"
                 $output.meta.goal["RSS Core Utilization"] = "decrease"
                 $output.meta.format["RSS Core Utilization"] = "0.00"
+                $output.meta.units["cpu utlization"] = "% Utilization"
             }
 
             if ($PathCosts.meta.props -contains "UVMS Data Core Utilization") { 
                 $output.meta.props += "UVMS Data Core Utilization"
                 $output.meta.goal["UVMS Data Core Utilization"] = "decrease"
                 $output.meta.format["UVMS Data Core Utilization"] = "0.00"
+                $output.meta.units["cpu utlization"] = "% Utilization"
             }
         }
         
@@ -302,7 +306,7 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-NTTTCP ([String] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+function Parse-NTTTCP ([String] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts, $Warmup, $Cooldown) {
     if ($Filename -match "pathcost") {
         Extract-PathCosts -Filename $Filename -PathCosts $PathCosts 
         return
@@ -388,7 +392,7 @@ function Extract-PathCosts ($Filename, $PathCosts) {
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $InnerPivotKeys, $OuterPivotKeys, $PathCosts, $Warmup, $Cooldown) {
 
     if ($Filename -match "pathcost") {
         Extract-PathCosts -Filename $Filename -PathCosts $PathCosts 
@@ -407,10 +411,10 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
     $bytesToGigabits = [Decimal] 8 / (1000 * 1000 * 1000)
 
     $throughput = [Array]@()
-    $warmupPadding = 2
+    $warmupPadding = $Warmup
     $dynamicWarmup = $true
     $dynamicCooldown = $true 
-    $cooldownPadding = 2
+    $cooldownPadding = $Cooldown
 
     for ($i = $warmupPadding; $i -lt $data.Count - $cooldownPadding; $i += 1) { 
 
@@ -438,7 +442,7 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
     $fileSplit = $fileSplit.Split("/")[-1]
     $sessionsStr = $fileSplit.Split(".")[2]
     $dataEntry = @{
-        "sessions"   = [Int] $sessionsStr.Substring(1)
+        "sessions"   =  $maxSessions
         "throughput" = $throughput
         "filename"   = $Filename
     }
@@ -468,7 +472,7 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-LATTE ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+function Parse-LATTE ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts, $Warmup, $Cooldown) {
 
     if ($Filename -match "pathcost") {
         Extract-PathCost -Filename $Filename -PathCosts $PathCosts 
@@ -520,13 +524,14 @@ function Parse-LATTE ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotK
         
         [Array] $latency = @()
         foreach ($line in $file) {
+
             if (-not ($line -match "\d+")) {
                 Write-Warning "Error Parsing file $FileName"
                 return
             }
             $latency += ,[int]$line
         }
-        $dataEntry.latency = $latency
+        $dataEntry.latency = $latency[$Warmup..$latency.Count - $Cooldown]
         $dataEntry.protocol = (($FileName.Split('\'))[-1].Split('.'))[0].ToUpper()
     }
 
@@ -555,7 +560,7 @@ function Parse-LATTE ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotK
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts, $Warmup, $Cooldown) {
 
     if ($Filename -match "pathcost") {
         Extract-PathCost -Filename $Filename -PathCosts $PathCosts 
@@ -574,62 +579,6 @@ function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPiv
         $dataEntry.latency += @($latencies[$i].latency) * $latencies[$i].frequency
     }
 
-
-
-    <#
-    $file = Get-Content $FileName
-
-    
-    $histDataEntry = @{
-        "filename" = $Filename
-    }
-
-    [Array] $latency = @()
-
-    $hasHistogram = $false
-    $histogram = @{}
-    foreach ($line in $file) {
-        $splitLine = Remove-EmptyStrings $line.Split(" ")
-
-        if ($splitLine.Count -eq 0) {continue}
-
-        if ($line.Trim() -eq "Interval(usec)	 Frequency") {
-            $hasHistogram = $true 
-            continue
-        }
-
-        if ($hasHistogram) {
-            $histogram[[Int]$splitLine[0]] = [Int]$splitLine[1]
-            continue
-        }
-
-        if ($splitLine[0] -Like "protocol*") {
-            $rawDataEntry.protocol = $splitline[-1]
-            $histDataEntry.protocol = $splitline[-1]
-            continue
-        } 
-        
-        if ($splitLine[-1] -Like "time=*") {
-            $latstr = $splitLine[-1]
-            $labelLen = "time=".Length
-            $unitLen = "us".Length 
-            $latency += ,[int] $latstr.Substring($labelLen, $latstr.Length - ($labelLen + $unitLen))
-        } 
-    }
-    $rawDataEntry.latency = $latency 
-    $histDataEntry.latency = $histogram
-
-    $iPivotKey = if ($rawDataEntry[$InnerPivot]) {$rawDataEntry[$InnerPivot]} else {""}
-    $oPivotKey = if ($rawDataEntry[$OuterPivot]) {$rawDataEntry[$OuterPivot]} else {""}
-
-    $InnerPivotKeys[$iPivotKey] = $true
-    $OuterPivotKeys[$oPivotKey] = $true
-
-    $output = @($rawDataEntry)
-    if ($histogram.Count -gt 0) {
-        $output = @($rawDataEntry, $histDataEntry)
-    }
-    #>
 
     return $dataEntry
 }
@@ -651,7 +600,7 @@ function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPiv
 .PARAMETER OuterPivot
     Name of outer pivot property
 #>
-function Parse-CPS ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts) {
+function Parse-CPS ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts, $Warmup, $Cooldown) {
     if ($Filename -match "pathcost") {
         Extract-PathCost -Filename $Filename -PathCosts $PathCosts 
         return

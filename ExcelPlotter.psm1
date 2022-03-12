@@ -92,7 +92,7 @@ function Create-ExcelFile {
             }
             
             $workbookObject.Saved = $true
-            $null = $workbookObject.Close()
+            $null = $workbookObject.Close() 
             $null = [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbookObject)
 
         }
