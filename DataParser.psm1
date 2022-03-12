@@ -531,7 +531,7 @@ function Parse-LATTE ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotK
             }
             $latency += ,[int]$line
         }
-        $dataEntry.latency = $latency[$Warmup..$latency.Count - $Cooldown]
+        $dataEntry.latency = $latency
         $dataEntry.protocol = (($FileName.Split('\'))[-1].Split('.'))[0].ToUpper()
     }
 

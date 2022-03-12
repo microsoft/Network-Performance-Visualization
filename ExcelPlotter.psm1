@@ -350,8 +350,9 @@ function Fill-Cell ($Worksheet, $Row, $Col, $CellSettings, [ref]$iter, $numIters
         }
         $Worksheet.Cells.Item($Row, $Col) = $cellvalue
     }
-
-    Write-Progress -Activity "Creating Excel File" -Id 4 -PercentComplete (100 * (($iter.Value++) / $numIters))
+    try {
+        Write-Progress -Activity "Creating Excel File" -Id 4 -PercentComplete (100 * (($iter.Value++) / $numIters))
+    } catch {}
 }
 
 ##
