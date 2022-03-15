@@ -208,11 +208,17 @@ function New-NetworkVisualization {
     $processedData.meta.datasetNames = @{}
     $processedData.meta.datasetNames["baseline"] = "baseline"
     $processedData.meta.datasetNames["test"] = "test"
+    $processedData.meta.usedCustomNames = @{
+        "baseline"  = $false
+        "test"      = $false
+    }
     if ($BaselineDatasetName) {
         $processedData.meta.datasetNames["baseline"] = $BaselineDatasetName
+        $processedData.meta.usedCustomNames["baseline"] = $true
     }
     if ($TestDatasetName) {
         $processedData.meta.datasetNames["test"] = $TestDatasetName
+        $processedData.meta.usedCustomNames["test"] = $true
     }
 
     $tables = @()
