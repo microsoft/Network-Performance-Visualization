@@ -162,7 +162,7 @@ function Format-RawData {
     }
     
     foreach ($prop in $dataObj.data.$OPivotKey.Keys) { 
-        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
+        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey 
 
         $table = @{
             "rows" = @{
@@ -371,28 +371,26 @@ function Get-WorksheetTitle ($BaseName, $OuterPivot, $OPivotKey, $InnerPivot, $I
     }
 }
 
-function Get-TableTitle ($Tool, $OuterPivot, $OPivotKey, $InnerPivot, $IPivotKey) { 
-    if ($OuterPivot -and $InnerPivot) {
+function Get-TableTitle ($Tool, $OuterPivot, $OPivotKey, $InnerPivot, $IPivotKey, $Comparison, $DatasetName, $UsedCustomName) { 
+    $title = $Tool
+      
+    if ($OuterPivot) {
         $OAbv = $ABBREVIATIONS[$OuterPivot]
-        $IAbv = $ABBREVIATIONS[$InnerPivot]
-
-        return "$Tool - $OPivotKey $OAbv - $IPivotKey $IAbv"
+        $title = "$title - $OPivotKey $OAbv"
     } 
-    elseif ($OuterPivot) {
-        $OAbv = $ABBREVIATIONS[$OuterPivot]
 
-        return "$Tool - $OPivotKey $OAbv"
-    } 
-    elseif ($InnerPivot) {
+    if ($InnerPivot) {
         $IAbv = $ABBREVIATIONS[$InnerPivot]
+        $title = "$title - $IPivotKey $IAbv"
+    }
 
-        return "$Tool - $IPivotKey $IAbv"
+    if ((-not $Comparison) -and $DatasetName -and $UsedCustomName) {
+        $title = "$DatasetName - $title"
     }
-    else {
-        return "$Tool"
-    }
-    
+
+    return $title
 }
+
 
 ##
 # Format-Stats
@@ -440,7 +438,7 @@ function Format-Stats {
     $completeIters = 0
 
     foreach ($prop in $meta.props) {
-        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey 
+        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -DatasetName $baselineName -Comparison $meta.comparison -UsedCustomName $meta.usedCustomNames.baseline
         $table = @{
             "rows" = @{
                 $prop = @{}
@@ -608,7 +606,7 @@ function Format-Quartiles {
 
     foreach ($prop in $meta.props) { 
         $format = $meta.format.$prop
-        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
+        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -DatasetName $baselineName -Comparison $meta.comparison -UsedCustomName $meta.usedCustomNames.baseline
         $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop)
         $table = @{
             "rows" = @{
@@ -695,6 +693,10 @@ function Format-Quartiles {
                     }
                 }
             }
+        }
+
+        if ((-not $meta.comparison) -and $meta.usedCustomNames["baseline"]) {
+            $table.chartSettings.title = "$baselineName - $cappedProp Quartiles"
         }
 
         if ($meta.comparison) {
@@ -905,7 +907,7 @@ function Format-MinMaxChart {
     $completeIters = 0
     foreach ($prop in $meta.props) {
         $cappedProp = (Get-Culture).TextInfo.ToTitleCase($prop) 
-        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey
+        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -DatasetName $baselineName -Comparison $meta.comparison -UsedCustomName $meta.usedCustomNames.baseline
         $table = @{
             "rows" = @{
                 $prop = @{}
@@ -993,6 +995,9 @@ function Format-MinMaxChart {
             }
         } 
         else {
+            if ($meta.usedCustomNames) {
+                $table.chartSettings.title = "$baselineName - $cappedProp"
+            }
             $table.chartSettings.seriesSettings = @{
                 1 = @{
                     "color"       = $ColorPalette.blue[3]
@@ -1129,14 +1134,18 @@ function Format-Percentiles {
         foreach ($IPivotKey in $meta.innerPivotKeys | Sort) { 
 
             if ($innerPivot) { 
-                $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles - $IPivotKey $innerPivot") 
-                $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles - $IPivotKey $innerPivot")
+                $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -DatasetName $baselineName -Comparison $meta.comparison -UsedCustomName $meta.usedCustomNames.baseline
             } 
             else {
-                $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles")  
-                $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+                $chartTitle = (Get-Culture).TextInfo.ToTitleCase("$prop Percentiles")
+                $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -DatasetName $baselineName -Comparison $meta.comparison -UsedCustomName $meta.usedCustomNames.baseline
             }
             
+            if ((-not $meta.comparison) -and $meta.usedCustomNames.baseline) {
+                $chartTitle = "$baselineName - $chartTitle"
+            }
+
             $table = @{
                 "rows" = @{
                     "percentiles" = @{}
@@ -1324,6 +1333,10 @@ function Get-HistogramTemplate {
         "$Property Histogram"
     }
 
+    if ((-not $meta.comparison) -and $meta.usedCustomNames.baseline) {
+        $chartTitle = "$baselineName - $chartTitle"
+    }
+
     $table = @{
         "rows" = @{
             "histogram buckets" = @{}
@@ -1435,7 +1448,7 @@ function Format-Histogram {
                 continue
             }
 
-            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $meta.OuterPivot -OPivotKey $OPivotKey -InnerPivot $meta.InnerPivot -IPivotKey $iPivotKey
+            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $meta.OuterPivot -OPivotKey $OPivotKey -InnerPivot $meta.InnerPivot -IPivotKey $iPivotKey -Comparison $meta.comparison -UsedCustomName $meta.usedCustomNames.baseline -DatasetName $baselineName 
             $table = Get-HistogramTemplate -DataObj $DataObj -TableTitle $tableTitle -Property $prop -IPivotKey $iPivotKey
 
             if ($data.baseline.histogram) {
@@ -1558,7 +1571,7 @@ function Format-Distribution {
             
             $logarithmic = Set-Logarithmic -Data $dataObj.data -OPivotKey $OPivotKey -Prop $Prop -IPivotKey $IPivotKey `
                                             -Meta $meta
-            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey
+            $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey -InnerPivot $innerPivot -IPivotKey $IPivotKey -DatasetName $baselineName -Comparison $meta.comparison -UsedCustomName $meta.usedCustomNames.baseline
             $data       = $dataObj.rawData.$mode 
             $table = @{
                 "meta" = @{

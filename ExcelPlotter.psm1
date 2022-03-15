@@ -82,7 +82,7 @@ function Create-ExcelFile {
         Fit-Cells -Worksheet $worksheetObject
         Write-Progress -Activity "Creating Excel File" -Status "Done" -Id 4 -PercentComplete 100
     } catch {
-        Write-Warning "Exception $($_.Exception.Message) in $($MyInvocation.MyCommand.Name)"
+        throw $_
     } finally {
         if ($null -ne $workbookObject) {
             try {
