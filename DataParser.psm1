@@ -443,11 +443,11 @@ function Parse-CTStraffic ( [String] $Filename, $InnerPivot, $OuterPivot , $Inne
         }
     }
 
-    $maxSessions = ($data."In-Flight" | measure -Max).Maximum
+    $maxSessions = ($data."In-Flight" | Measure-Object -Max).Maximum
     
     $sessionsStr = $fileSplit.Split(".")[2]
     $dataEntry = @{
-        "sessions"   =  $maxSessions
+        "sessions"   =  [Int] $maxSessions
         "throughput" = $throughput
         "filename"   = $Filename
     }
