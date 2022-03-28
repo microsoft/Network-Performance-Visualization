@@ -66,7 +66,7 @@ Description = 'Network-Data-Visualization is a tool used to visualize the data p
 # FormatsToProcess = @()
 
 # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-NestedModules = @('DataFormatters.psm1', 'DataParser.psm1', 'DataProcessor.psm1', 'ExcelPlotter.psm1')
+NestedModules = @('DataFormatters.psm1', 'DataParser.psm1', 'DataProcessor.psm1', 'ExcelPlotter.psm1', 'DataRestructure.psm1')
 
 # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
 FunctionsToExport = @('New-NetworkVisualization')

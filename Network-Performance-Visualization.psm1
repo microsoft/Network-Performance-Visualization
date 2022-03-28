@@ -161,9 +161,13 @@ function New-NetworkVisualization {
         [PivotArgumentCompleter()]
         [String] $OuterPivot = "none",
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$false)] 
         [ValidatePattern('[.]*\.xl[txms]+')]
-        [String] $SavePath,
+        [String] $SavePath=".\visualization.xlsx",
+
+        
+        [Parameter(Mandatory=$false)] 
+        [string] $JsonSavePath = $null,
 
         [Parameter(Mandatory=$false)]
         [Int] $Warmup = 0,
@@ -174,7 +178,10 @@ function New-NetworkVisualization {
         [Parameter(Mandatory=$false, ParameterSetName = "LATTE")]
         [Parameter(Mandatory=$false, ParameterSetName = "CPS")]
         [Parameter(Mandatory=$false, ParameterSetName = "LagScope")]
-        [Int] $SubsampleRate = -1
+        [Int] $SubsampleRate = -1, 
+        
+        [Parameter(Mandatory=$false)]
+        [Switch] $NoExcel
     )
 
     $starttime = (Get-Date)
@@ -193,12 +200,13 @@ function New-NetworkVisualization {
     $InnerPivot = if ($InnerPivot -eq "none") {""} else {$InnerPivot}
     $OuterPivot = if ($OuterPivot -eq "none") {""} else {$OuterPivot}
 
-    Add-ExcelTypes 
+    if (-not $NoExcel) {
+        Add-ExcelTypes 
+    }
 
     # Parse Data
     $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Warmup $Warmup -Cooldown $Cooldown
 
-  
     $testRaw     = $null
     if ($TestDir) {
         $testRaw = Get-RawData -Tool $tool -DirName $TestDir -Mode "Test" -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Warmup $Warmup -Cooldown $Cooldown
@@ -221,6 +229,15 @@ function New-NetworkVisualization {
         $processedData.meta.usedCustomNames["test"] = $true
     }
 
+    if ($JsonSavePath) {
+        $output = Restructure-Data -DataObj $processedData
+        if ($NoExcel) { 
+            ($output | ConvertTo-Json -Depth 100) | Out-File -FilePath $JsonSavePath 
+            return
+        }
+    }
+
+    
     $tables = @()
     foreach ($oPivotKey in $processedData.data.Keys) { 
         $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
@@ -255,7 +272,10 @@ function New-NetworkVisualization {
     # Powershell wont print more than two lines here
     Write-Host "Time: $($delta.Minutes) Min $($delta.Seconds) Sec"   
     Write-Host "Report: $fullPath `n`n" 
-    #processing_end -OutPut $fullPath -Starttime $starttime 
+    #processing_end -OutPut $fullPath -Starttime $starttime     
+    if ($JsonSavePath) { 
+        ($output | ConvertTo-Json -Depth 100) | Out-File -FilePath $JsonSavePath  
+    }
 }
 
 <#
