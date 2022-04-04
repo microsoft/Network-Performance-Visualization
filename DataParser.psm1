@@ -175,23 +175,23 @@ function Get-RawData {
                 $output.meta.units["vSwitch root VP utilization"] = "% Utilization"
             }
 
-            if ($PathCosts.meta.props -contains "cpu utlization") { 
-                $output.meta.props += "cpu utlization"
-                $output.meta.goal["cpu utlization"] = "decrease"
-                $output.meta.format["cpu utlization"] = "0.00"
-                $output.meta.units["cpu utlization"] = "% Utilization"
+            if ($PathCosts.meta.props -contains "CPU Utlization") { 
+                $output.meta.props += "CPU Utlization"
+                $output.meta.goal["CPU Utlization"] = "decrease"
+                $output.meta.format["CPU Utlization"] = "0.00"
+                $output.meta.units["CPU Utlization"] = "% Utilization"
             }
 
-            if ($PathCosts.meta.props -contains "cycles/packet") { 
-                $output.meta.props += "cycles/packet"
-                $output.meta.goal["cycles/packet"] = "decrease"
-                $output.meta.format["cycles/packet"] = "0.00"
+            if ($PathCosts.meta.props -contains "Packet path cost (cycles/packet)") { 
+                $output.meta.props += "Packet path cost (cycles/packet)"
+                $output.meta.goal["Packet path cost (cycles/packet)"] = "decrease"
+                $output.meta.format["Packet path cost (cycles/packet)"] = "0.00"
             }
 
-            if ($PathCosts.meta.props -contains "cycles/byte") { 
-                $output.meta.props += "cycles/byte"
-                $output.meta.goal["cycles/byte"] = "decrease"
-                $output.meta.format["cycles/byte"] = "0.00"
+            if ($PathCosts.meta.props -contains "Byte path cost (cycles/byte)") { 
+                $output.meta.props += "Byte path cost (cycles/byte)"
+                $output.meta.goal["Byte path cost (cycles/byte)"] = "decrease"
+                $output.meta.format["Byte path cost (cycles/byte)"] = "0.00"
             }
 
             if ($PathCosts.meta.props -contains "RSS Core Utilization") { 
@@ -255,8 +255,8 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
                     $cpb = $PathCosts[$file]["Total CPU cycles used per second"] / $avgTput
                 }
 
-                if ("cycles/byte" -notin $PathCosts.meta.props) {
-                    $PathCosts.meta.props += "cycles/byte"
+                if ("Byte path cost (cycles/byte)" -notin $PathCosts.meta.props) {
+                    $PathCosts.meta.props += "Byte path cost (cycles/byte)"
                 }
 
             }
@@ -267,7 +267,7 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
             # should look for a more sustainable solution in the future
             
             if ($cpb -lt 100) {
-                $entry["cycles/byte"] = $cpb 
+                $entry["Byte path cost (cycles/byte)"] = $cpb 
             } 
 
             if ($vsrvp -and $vsrvp -le 100) { 
@@ -282,8 +282,8 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
                 $entry["RSS Core Utilization"] = $rcu 
             }
 
-            $entry["cycles/packet"] = $cpp
-            $entry["cpu utlization"] = $cpu
+            $entry["Packet path cost (cycles/packet)"] = $cpp
+            $entry["CPU Utilization"] = $cpu
             $entry["total root VP utilization"] = $trvp
             
         }
