@@ -4,6 +4,9 @@ $CTSPivots = @("sessions", "none")
 $CPSPivots = @("none")
 $LagScopePivots = @("none")
 
+$DEFAULT_SAVEPATH = ".\visualization.xlsx"
+$DEFAULT_JSONPATH = ".\stats.xlsx"
+
  
 
 #
@@ -58,6 +61,9 @@ function processing_end {
     Write-Host "Report: $OutPut"
     Write-Host " " 
 }
+
+
+
 
 <#
 .SYNOPSIS
@@ -141,17 +147,20 @@ function New-NetworkVisualization {
         [Parameter(Mandatory=$false, ParameterSetName="LATTE")]
         [Int] $NumHistogramBuckets = 50,
 
-        [Parameter(Mandatory=$true)]
-        [String] $BaselineDir, 
+        [Parameter(Mandatory=$false)]
+        [String] $BaselineDir = "", 
 
         [Parameter(Mandatory=$false)]
-        [String] $BaselineDatasetName = $null,
+        [String] $BaselineDatasetName = "",
 
         [Parameter(Mandatory=$false)]
-        [String] $TestDir = $null,
+        [String] $TestDir = "",
 
         [Parameter(Mandatory=$false)]
-        [String] $TestDatasetName = $null,
+        [String] $TestDatasetName = "",
+
+        [Parameter(Mandatory=$false)]
+        [String] $JsonInputPath = "",
 
         [Parameter(Mandatory=$false)]
         [PivotArgumentCompleter()]
@@ -163,11 +172,11 @@ function New-NetworkVisualization {
 
         [Parameter(Mandatory=$false)] 
         [ValidatePattern('[.]*\.xl[txms]+')]
-        [String] $SavePath=".\visualization.xlsx",
+        [String] $SavePath=$DEFAULT_SAVEPATH,
 
         
         [Parameter(Mandatory=$false)] 
-        [string] $JsonSavePath = $null,
+        [string] $JsonSavePath = "",
 
         [Parameter(Mandatory=$false)]
         [Int] $Warmup = 0,
@@ -184,14 +193,31 @@ function New-NetworkVisualization {
         [Switch] $NoExcel
     )
 
+    $ErrorActionPreference = "Stop"
+
+    Confirm-Parameters -BaselineDir $BaselineDir -TestDir $TestDir -JsonInputPath $JsonInputPath -NoExcel $NoExcel -JsonSavePath $JsonSavePath
+
+    if ($NoExcel -and ($JsonSavePath -eq "")) {
+        $JsonSavePath = $DEFAULT_JSONPATH
+    }
+    if ($JsonInputPath -ne "") {
+        $JsonSavePath = ""
+    }
+
     $starttime = (Get-Date)
     Clear-Host 
-    $ErrorActionPreference = "Stop"
 
     # Normalize SavePath
     $file = Split-Path $SavePath -Leaf
     $dir = Convert-Path $(Split-Path $SavePath -Parent)
     $fullPath = Join-Path $dir $file
+
+    # Normalize JsonSavePath
+    if ($JsonSavePath) {
+        $JsonFile = Split-Path $JsonSavePath -Leaf
+        $jsonDir = Convert-Path $(Split-Path $JsonSavePath -Parent)
+        $jsonFullPath = Join-Path $jsonDir $JsonFile 
+    }
 
     $tool = $PSCmdlet.ParameterSetName
     Confirm-Pivots -Tool $tool -InnerPivot $InnerPivot -OuterPivot $OuterPivot 
@@ -204,40 +230,50 @@ function New-NetworkVisualization {
         Add-ExcelTypes 
     }
 
-    # Parse Data
-    $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Warmup $Warmup -Cooldown $Cooldown
 
-    $testRaw     = $null
-    if ($TestDir) {
-        $testRaw = Get-RawData -Tool $tool -DirName $TestDir -Mode "Test" -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Warmup $Warmup -Cooldown $Cooldown
-    } 
-    $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot -NumHistogramBuckets $NumHistogramBuckets
-    
-    $processedData.meta.datasetNames = @{}
-    $processedData.meta.datasetNames["baseline"] = "baseline"
-    $processedData.meta.datasetNames["test"] = "test"
-    $processedData.meta.usedCustomNames = @{
-        "baseline"  = $false
-        "test"      = $false
-    }
-    if ($BaselineDatasetName) {
-        $processedData.meta.datasetNames["baseline"] = $BaselineDatasetName
-        $processedData.meta.usedCustomNames["baseline"] = $true
-    }
-    if ($TestDatasetName) {
-        $processedData.meta.datasetNames["test"] = $TestDatasetName
-        $processedData.meta.usedCustomNames["test"] = $true
+    if ($JsonInputPath) {
+        $jsonInputObj = Get-Content -Path $JsonInputPath | ConvertFrom-Json 
+        $processedData =  Parse-RestructedData -DataObj $jsonInputObj
+    } else {
+        # Parse Data
+        $baselineRaw = Get-RawData -Tool $tool -DirName $BaselineDir -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Warmup $Warmup -Cooldown $Cooldown
+
+        $testRaw     = $null
+        if ($TestDir) {
+            $testRaw = Get-RawData -Tool $tool -DirName $TestDir -Mode "Test" -InnerPivot $InnerPivot -OuterPivot $OuterPivot -Warmup $Warmup -Cooldown $Cooldown
+        } 
+        $processedData = Process-Data -BaselineRawData $baselineRaw -TestRawData $testRaw -InnerPivot $InnerPivot -OuterPivot $OuterPivot -NumHistogramBuckets $NumHistogramBuckets
+        
+        $processedData.meta.datasetNames = @{}
+        $processedData.meta.datasetNames["baseline"] = "baseline"
+        $processedData.meta.datasetNames["test"] = "test"
+        $processedData.meta.usedCustomNames = @{
+            "baseline"  = $false
+            "test"      = $false
+        }
+        if ($BaselineDatasetName) {
+            $processedData.meta.datasetNames["baseline"] = $BaselineDatasetName
+            $processedData.meta.usedCustomNames["baseline"] = $true
+        }
+        if ($TestDatasetName) {
+            $processedData.meta.datasetNames["test"] = $TestDatasetName
+            $processedData.meta.usedCustomNames["test"] = $true
+        }
     }
 
     if ($JsonSavePath) {
         $output = Restructure-Data -DataObj $processedData
-        if ($NoExcel) { 
-            ($output | ConvertTo-Json -Depth 100) | Out-File -FilePath $JsonSavePath 
-            return
-        }
+        ($output | ConvertTo-Json -Depth 100) | Out-File -FilePath $jsonFullPath
     }
 
-    
+    if ($NoExcel) {
+        $endtime = (Get-Date)
+        $delta   = $endtime - $starttime 
+        Write-Host "Time: $($delta.Minutes) Min $($delta.Seconds) Sec"   
+        Write-Host "Json File: $jsonFullPath `n`n" 
+        return
+    }
+
     $tables = @()
     foreach ($oPivotKey in $processedData.data.Keys) { 
         $tables += Format-Stats -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
@@ -248,7 +284,7 @@ function New-NetworkVisualization {
         } elseif ($tool -in @("LATTE", "LagScope")) { 
             #$tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-            $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
+            $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
         } elseif ($tool -in @("CPS")) {
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "conn/s" -SubSampleRate $SubsampleRate
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "close/s" -SubSampleRate $SubsampleRate
@@ -271,7 +307,9 @@ function New-NetworkVisualization {
 
     # Powershell wont print more than two lines here
     Write-Host "Time: $($delta.Minutes) Min $($delta.Seconds) Sec"   
-    Write-Host "Report: $fullPath `n`n" 
+    Write-Host "Report: $fullPath" 
+    Write-Host "Json File: $jsonFullPath `n`n"
+
     #processing_end -OutPut $fullPath -Starttime $starttime     
     if ($JsonSavePath) { 
         ($output | ConvertTo-Json -Depth 100) | Out-File -FilePath $JsonSavePath  
@@ -336,3 +374,21 @@ function Confirm-Pivots ($Tool, $InnerPivot, $OuterPivot) {
         Write-Error "Cannot use the same property for both inner and outer pivots." -ErrorAction "Stop"
     }
 }
+function Confirm-Parameters($BaselineDir, $TestDir, $JsonInputPath, $NoExcel, $JsonSavePath) {
+    if ($TestDir -and ($BaselineDir -eq "")) {
+        Write-Error "TestDir should only be used if BaselineDir is non-null"
+    }
+    if (($BaselineDir -ne "") -and ($JsonInputPath -ne "")) { 
+        Write-Error "Cannot injest raw data and pre-processed data at the same time. Use either BaselineDir+TestDir OR JsonInputPath"
+    }
+    if (($BaselineDir -eq "") -and ($JsonInputPath -eq "")) {
+        Write-Error "Must provide a non-null value to either BaselineDir or InputJsonPath parameters"
+    } 
+    if (($JsonInputPath -ne "") -and ($JsonSavePath -ne "")) {
+        Write-Warning "Ignoring JsonSavePath parameter since JsonInputPath was used to provide input (input is already pre-processed json file)"
+    }
+    if (($JsonInputPath -ne "") -and ($NoExcel)) {
+        Write-Error "Cannot run in NoExcel mode when providing input through JsonInputPath"
+    }
+}
+ 

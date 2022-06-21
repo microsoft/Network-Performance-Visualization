@@ -182,16 +182,16 @@ function Get-RawData {
                 $output.meta.units["CPU Utlization"] = "% Utilization"
             }
 
-            if ($PathCosts.meta.props -contains "Packet path cost (cycles/packet)") { 
-                $output.meta.props += "Packet path cost (cycles/packet)"
-                $output.meta.goal["Packet path cost (cycles/packet)"] = "decrease"
-                $output.meta.format["Packet path cost (cycles/packet)"] = "0.00"
+            if ($PathCosts.meta.props -contains "cycles/packet") { 
+                $output.meta.props += "cycles/packet"
+                $output.meta.goal["cycles/packet"] = "decrease"
+                $output.meta.format["cycles/packet"] = "0.00"
             }
 
-            if ($PathCosts.meta.props -contains "Byte path cost (cycles/byte)") { 
-                $output.meta.props += "Byte path cost (cycles/byte)"
-                $output.meta.goal["Byte path cost (cycles/byte)"] = "decrease"
-                $output.meta.format["Byte path cost (cycles/byte)"] = "0.00"
+            if ($PathCosts.meta.props -contains "cycles/byte") { 
+                $output.meta.props += "cycles/byte"
+                $output.meta.goal["cycles/byte"] = "decrease"
+                $output.meta.format["cycles/byte"] = "0.00"
             }
 
             if ($PathCosts.meta.props -contains "RSS Core Utilization") { 
@@ -238,9 +238,9 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
         $file = $entry.filename.Split("\")[-1]
         if ($PathCosts.ContainsKey($file)) {
             
-            $cpb = $PathCosts[$file]["Byte path cost (cycles/byte)"]
+            $cpb = $PathCosts[$file]["cycles/byte"]
             $cpu = $PathCosts[$file]["CPU Utilization"]
-            $cpp = $PathCosts[$file]["Packet path cost (cycles/packet)"]
+            $cpp = $PathCosts[$file]["cycles/packet"]
             $trvp = $PathCosts[$file]["Total Root VP Utilization"]
             $vsrvp = $PathCosts[$file]["vSwitch Root VP Utilization"]
             $udcu = $PathCosts[$file]["UVMS Data Core Utilization"]
@@ -255,8 +255,8 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
                     $cpb = $PathCosts[$file]["Total CPU cycles used per second"] / $avgTput
                 }
 
-                if ("Byte path cost (cycles/byte)" -notin $PathCosts.meta.props) {
-                    $PathCosts.meta.props += "Byte path cost (cycles/byte)"
+                if ("cycles/byte" -notin $PathCosts.meta.props) {
+                    $PathCosts.meta.props += "cycles/byte"
                 }
 
             }
@@ -267,7 +267,7 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
             # should look for a more sustainable solution in the future
             
             if ($cpb -lt 100) {
-                $entry["Byte path cost (cycles/byte)"] = $cpb 
+                $entry["cycles/byte"] = $cpb 
             } 
 
             if ($vsrvp -and $vsrvp -le 100) { 
@@ -282,7 +282,7 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
                 $entry["RSS Core Utilization"] = $rcu 
             }
 
-            $entry["Packet path cost (cycles/packet)"] = $cpp
+            $entry["cycles/packet"] = $cpp
             $entry["CPU Utilization"] = $cpu
             $entry["total root VP utilization"] = $trvp
             
@@ -324,7 +324,7 @@ function Parse-NTTTCP ([String] $FileName, $InnerPivot, $OuterPivot, $InnerPivot
 
     [Decimal] $cycles = $file.ChildNodes.cycles.'#text'
     [Decimal] $throughput = ($file.ChildNodes.throughput | where {$_.metric -eq "mbps"})."#text" / 1000
-    [Int] $sessions = $file.ChildNodes.parameters.max_active_threads #should this be .num_processors or .parametes.max_active_threads?
+    [Int] $sessions = [Int] $filename.split("\")[-1].split(".")[2].substring(1) #should this be .num_processors or .parametes.max_active_threads?
     [Int] $bufferLen = $file.ChildNodes.bufferLen
     [Int] $bufferCount = $file.ChildNodes.io
 
@@ -365,10 +365,14 @@ function Extract-PathCosts ($Filename, $PathCosts) {
         }
         $obj.psobject.properties | Foreach {
             try {
-                if ($_.Name -notin $PathCosts.meta.props) {
-                    $PathCosts.meta.props += $_.Name
+                $propName = $_.Name
+                if ($propName -Match ".*(\(.*\)).*") {
+                    $propName = $Matches[1]
                 }
-                $values[$_.Name] = [Decimal]$_.Value 
+                if ($propName -notin $PathCosts.meta.props) {
+                    $PathCosts.meta.props += $propName
+                }
+                $values[$propName] = [Decimal]$_.Value 
             } catch {}
         }
         $PathCosts[$key] = $values
@@ -583,7 +587,6 @@ function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPiv
     for ($i = 0; $i -lt $latencies.Count; $i++) {
         $dataEntry.latency += @($latencies[$i].latency) * $latencies[$i].frequency
     }
-
 
     return $dataEntry
 } 

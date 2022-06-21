@@ -41,294 +41,6 @@ function Get-ColName($n) {
     return "$c1$c2"
 }
 
-##
-# Format-RawData
-# --------------
-# This function formats raw data into tables, one for each dataEntry property. Data samples are
-# organized by their sortProp and labeled with the name of the file from which the data sample was extracted.
-#
-# Parameters
-# ----------
-# DataObj (HashTable) - Object containing processed data, raw data, and meta data
-# TableTitle (String) - Title to be displayed at the top of each table
-# 
-# Return
-# ------
-# HashTable[] - Array of HashTable objects which each store a table of formatted raw data
-#
-##
-function Format-RawData {
-    param (
-        [Parameter(Mandatory=$true)] [PSobject[]] $DataObj,
-
-        [Parameter(Mandatory=$true)] $OPivotKey,
-
-        [Parameter()] [String] $Tool = "",
-
-        [Parameter()] [switch] $NoNewWorksheets
-    )
-
-    $legend = @{
-        "meta" = @{
-            "colLabelDepth" = 1
-            "rowLabelDepth" = 1
-            "dataWidth"     = 2
-            "dataHeight"    = 3 
-            "name"          = "legend"
-            "numWrites"     = 3 + 3 + 5 
-        }
-        "rows" = @{
-            " "   = 0
-            "  "  = 1
-            "   " = 2
-        }
-        "cols" = @{
-            "legend" = @{
-                " "  = 0
-                "  " = 1
-            }
-        }
-        "data" = @{
-            "legend" = @{
-                " " = @{
-                    " " = @{
-                        "value" = "Test values are compared against the mean basline value."
-                    }
-                    "  " = @{
-                        "value" = "Test values which show improvement are colored green:"
-                    }
-                    "   " = @{
-                        "value" = "Test values which show regression are colored red:"
-                    }
-                }
-                "  " = @{
-                    "  " = @{
-                        "value"     = "Improvement"
-                        "fontColor" = $ColorPalette.Green
-                        "cellColor" = $ColorPalette.LightGreen
-                    }
-                    "   " = @{
-                        "value"     = "Regression"
-                        "fontColor" = $ColorPalette.Red
-                        "cellColor" = $ColorPalette.LightRed
-                    }
-                } 
-            }
-        }
-    }
-
-    $meta       = $DataObj.meta
-    $innerPivot = $meta.InnerPivot
-    $outerPivot = $meta.OuterPivot
-    $tables     = @()
-
-    if (-not $NoNewWorksheets) {
-        $tables += Get-WorksheetTitle -BaseName "Raw Data" -OuterPivot $outerPivot -OPivotKey $OPivotKey
-    }
-    if ($meta.comparison) {
-        $tables += $legend
-    }
-
-
-    $numBaseline = $DataObj.rawData.baseline.Count
-    $numTest = if ($meta.comparison) {$DataObj.rawData.test.Count} else {0}
-    $numProps = $dataObj.data.$OPivotKey.Keys.Count
-    $numIters = ($numBaseline + $numTest + $meta.outerPivotKeys.Count + ($numProps * ($numBaseline + $numTest)))
-    $j = 0
-    # Fill single array with all data and sort, label data as baseline/test if necessary
-    [Array] $data = @() 
-    foreach ($entry in $DataObj.rawData.baseline) {
-        if ($meta.comparison) {
-            $entry.baseline = $true
-        } 
-        if ($OPivotKey -in @("", $entry.$outerPivot)) {
-            $data += $entry
-        }
-        
-        Write-Progress -Activity "Formatting Tables" -Status "Raw Data Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
-    }
-
-    if ($meta.comparison) {
-        foreach ($entry in $DataObj.rawData.test) {
-            if ($OPivotKey -in @("", $entry.$outerPivot)) {
-                $data += $entry
-            }
-            Write-Progress -Activity "Formatting Tables" -Status "Raw Data Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
-        }
-    }
-
-    if ($innerPivot) {
-        $data = Sort-ByProp -Objs $data -Prop $innerPivot -Int $true
-    }
-    
-    foreach ($prop in $dataObj.data.$OPivotKey.Keys) { 
-        $tableTitle = Get-TableTitle -Tool $Tool -OuterPivot $outerPivot -OPivotKey $OPivotKey 
-
-        $table = @{
-            "rows" = @{
-                $prop = @{}
-            }
-            "cols" = @{
-                $tableTitle = @{
-                    $innerPivot = @{}
-                }
-            }
-            "meta" = @{
-                "columnFormats" = @()
-                "leftAlign"     = [Array] @(2)
-                "name"          = "Raw Data"
-                "numWrites"     = 1 + 2
-            }
-            "data"  = @{
-                $tableTitle = @{
-                    $innerPivot = @{}
-                }
-            }
-        }
-        $col = 0
-        $row = 0
-
-        foreach ($entry in $data) {
-            $iPivotKey = if ($innerPivot) {$entry.$innerPivot} else {""}
-
-            # Add column labels to table
-            if (-not ($table.cols.$tableTitle.$innerPivot.Keys -contains $iPivotKey)) {
-                if ($meta.comparison) {
-                    $table.cols.$tableTitle.$innerPivot.$iPivotKey = @{
-                        "baseline" = $col
-                        "test"     = $col + 1
-                    }
-                    $table.meta.columnFormats += @($meta.format.$prop, $meta.format.$prop)
-                    $table.meta.numWrites += 3
-                    $col += 2
-                    $table.data.$tableTitle.$innerPivot.$iPivotKey = @{
-                        "baseline" = @{
-                            $prop = @{}
-                        }
-                        "test" = @{
-                            $prop = @{}
-                        }
-                    }
-                } 
-                else {
-                    $table.meta.numWrites += 1
-                    $table.meta.columnFormats += $meta.format.$prop
-                    $table.cols.$tableTitle.$innerPivot.$iPivotKey = $col
-                    $table.data.$tableTitle.$innerPivot.$iPivotKey = @{
-                        $prop = @{}
-                    }
-                    $col += 1
-                }
-            }
-
-            # Add row labels and fill data in table
-            $filename = $entry.fileName.Split('\')[-2] + "\" + $entry.fileName.Split('\')[-1]
-            while ($table.rows.$prop.keys -contains $filename) {
-                $filename += "*"
-            }
-            $table.rows.$prop.$filename = $row
-            $table.meta.numWrites += 1
-            $row += 1
-            if ($meta.comparison) {
-                if ($entry.baseline) {
-                    $table.data.$tableTitle.$innerPivot.$iPivotKey.baseline.$prop.$filename = @{
-                        "value" = $entry.$prop
-                    }
-                }
-                else {
-                    $table.data.$tableTitle.$innerPivot.$iPivotKey.test.$prop.$filename = @{
-                        "value" = $entry.$prop
-                    }
-                    $params = @{
-                        "Cell"    = $table.data.$tableTitle.$innerPivot.$iPivotKey.test.$prop.$filename
-                        "TestVal" = $entry.$prop
-                        "BaseVal" = $DataObj.data.$OPivotKey.$prop.$iPivotKey.baseline.stats.mean
-                        "Goal"    = $meta.goal.$prop
-                    }
-                    
-                    $table.data.$tableTitle.$innerPivot.$iPivotKey.test.$prop.$filename = Set-CellColor @params
-                }
-            } 
-            else {
-                $table.data.$tableTitle.$innerPivot.$iPivotKey.$prop.$filename = @{
-                    "value" = $entry.$prop
-                }
-            }
-            Write-Progress -Activity "Formatting Tables" -Status "Raw Data Table" -Id 3 -PercentComplete (100 * (($j++) / $numIters))
-        }
-        $table.meta.numWrites    += $data.Count 
-        $table.meta.dataWidth     = Get-TreeWidth $table.cols
-        $table.meta.colLabelDepth = Get-TreeDepth $table.cols
-        $table.meta.dataHeight    = Get-TreeWidth $table.rows
-        $table.meta.rowLabelDepth = Get-TreeDepth $table.rows  
-        $tables = $tables + $table 
-
-    }
-
-    foreach ($entry in $data) {
-        if ($entry.baseline) {
-            $entry.Remove("baseline")
-        }
-    }
-    Write-Progress -Activity "Formatting Tables" -Status "Raw Data Table" -Id 3 -PercentComplete 100 
-    return $tables
-}
-
-
-function Sort-ByProp ($Objs, $Prop, $Int) 
-{
-    $arrs = [Array] @()
-
-    foreach ($obj in $Objs) {
-        $arrs += [Array]@($obj)
-    }
-
-    while ($arrs.Count > 1) {
-        $newArr = @()
-        for ($i = 0; $i -lt $arrs.Count - 1; $i += 2) {
-            $merged = Merge-Arrays($arrs[$i], $arrs[$i + 1], $Prop, $Int)
-            $newArr.Add($merged)
-        }
-        $arrs = $newArr
-    }
-    return $arrs
-}
-
-function Merge-Arrays ($Arr1, $Arr2, $Prop, $Int) {
-    $i = 0
-    $j = 0
-    $newArr = @()
-    while (($i -lt $Arr1.Count) -and ($j -lt $Arr2.Count)) {
-        if ($true) {
-            if ([Int]($Arr1[$i].$Prop) -le [Int]($Arr2[$j].$Prop)) {
-                $newArr += $Arr1[$i]
-                $i++
-            } else {
-                $newArr += $Arr2[$j]
-                $j++
-            }
-        } else {
-            if ($Arr1[$i].$Prop -le $Arr2[$j].$Prop) {
-                $newArr += $Arr1[$i]
-                $i++
-            } else {
-                $newArr += $Arr2[$j]
-                $j++
-            }
-        }
-    }
-
-    while ($i -lt $Arr1.Count) {
-        $newArr += $Arr1[$i]
-        $i++
-    }
-    while ($j -lt $arr2.Count) {
-        $newArr += $Arr2[$j]
-        $j++
-    }
-
-    return $newArr
-}
 
 function Get-WorksheetTitle ($BaseName, $OuterPivot, $OPivotKey, $InnerPivot, $IPivotKey, $Prop="") {
     if ($OuterPivot -and $InnerPivot) {
@@ -789,17 +501,17 @@ function Format-Quartiles {
     
         
         # Add row labels and fill data in table
-        $row = 0
+        $row = 0 
         foreach ($IPivotKey in $meta.InnerPivotKeys | Sort) {
             if (-not $meta.comparison) {
                 $table.meta.numWrites += 1
                 $table.rows.$prop.$innerPivot.$IPivotKey = $row
                 $row += 1
                 $table.data.$TableTitle.min.$prop.$innerPivot.$IPivotKey = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
-                $table.data.$TableTitle.Q1.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] - $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
-                $table.data.$TableTitle.Q2.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] } 
-                $table.data.$TableTitle.Q3.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50]}
-                $table.data.$TableTitle.Q4.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.max - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] }
+                $table.data.$TableTitle.Q1.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["25"] - $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
+                $table.data.$TableTitle.Q2.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["50"] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["25"] } 
+                $table.data.$TableTitle.Q3.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["75"] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["50"]}
+                $table.data.$TableTitle.Q4.$prop.$innerPivot.$IPivotKey  = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.max - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["75"] }
             } 
             else {
                 $table.meta.numWrites += 3
@@ -816,28 +528,28 @@ function Format-Quartiles {
                     $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.min}
                 }
                 $table.data.$TableTitle."<baseline>Q1".$prop.$innerPivot.$IPivotKey = @{
-                    $baselineName = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] - $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
+                    $baselineName = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["25"] - $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.min }
                 }
                 $table.data.$TableTitle."<test>Q1".$prop.$innerPivot.$IPivotKey = @{
-                    $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[25] - $data.$OPivotKey.$prop.$IPivotKey.test.stats.min }
+                    $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles["25"] - $data.$OPivotKey.$prop.$IPivotKey.test.stats.min }
                 }
                 $table.data.$TableTitle."<baseline>Q2".$prop.$innerPivot.$IPivotKey = @{
-                    $baselineName = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[25] } 
+                    $baselineName = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["50"] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["25"] } 
                 }
                 $table.data.$TableTitle."<test>Q2".$prop.$innerPivot.$IPivotKey = @{
-                    $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[50] - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[25] } 
+                    $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles["50"] - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles["25"] } 
                 }
                 $table.data.$TableTitle."<baseline>Q3".$prop.$innerPivot.$IPivotKey = @{
-                    $baselineName = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[50] } 
+                    $baselineName = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["75"] - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["50"] } 
                 }
                 $table.data.$TableTitle."<test>Q3".$prop.$innerPivot.$IPivotKey = @{  
-                    $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[75] - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[50] }
+                    $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.percentiles["75"] - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles["50"] }
                 }
                 $table.data.$TableTitle."<baseline>Q4".$prop.$innerPivot.$IPivotKey = @{
-                    $baselineName = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.max - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles[75] }
+                    $baselineName = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.max - $data.$OPivotKey.$prop.$IPivotKey.baseline.percentiles["75"] }
                 }
                 $table.data.$TableTitle."<test>Q4".$prop.$innerPivot.$IPivotKey = @{
-                    $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.max - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles[75] }
+                    $testName     = @{ "value" = $data.$OPivotKey.$prop.$IPivotKey.test.stats.max - $data.$OPivotKey.$prop.$IPivotKey.test.percentiles["75"] }
                 }
             }
             Write-Progress -Activity "Formatting Tables" -Status "Quartiles Table" -Id 3 -PercentComplete (100 * (($completeIters++) / $numIters))
@@ -1232,7 +944,10 @@ function Format-Percentiles {
             }
 
             # Add row labels and fill data in table
-            foreach ($percentile in $keys | Sort) {
+            
+            $sortedKeys = Sort-StringsAsNumbers -Arr $keys 
+
+            foreach ($percentile in $sortedKeys) {
                 $table.rows.percentiles.$percentile = $row
                 $table.meta.numWrites += 1
                 if ($meta.comparison) { 
@@ -1280,6 +995,80 @@ function Format-Percentiles {
     Write-Progress -Activity "Formatting Tables" -Status "Done" -Id 3 -PercentComplete 100
 
     return $tables  
+}
+
+
+function Sort-ByIndex ($Arr) 
+{
+    $subArrs = [System.Collections.ArrayList] @()
+
+    for ($idx = 0; $idx -lt $Arr.Count; $idx++) {
+        $null = $subArrs.Add([System.Collections.ArrayList] @($idx))
+    }
+
+    while ($subArrs.Count -gt 1) {
+        $newArr = [System.Collections.ArrayList] @()
+
+        for ($i = 0; $i -lt $subArrs.Count; $i += 2) {
+            if ($i -lt $subArrs.Count - 1) {
+                $merged = Merge-Arrays -IdxArr1 $subArrs[$i] -IdxArr2 $subArrs[$i + 1] -ValArr $Arr
+                $null = $newArr.Add($merged)
+            } else {
+                $null = $newArr.Add($subArrs[$i])
+            }
+            
+        }
+        $subArrs = $newArr
+    }
+    return $subArrs
+}
+
+function Merge-Arrays ($IdxArr1, $IdxArr2, $ValArr) {
+    $i = 0
+    $j = 0
+    $newArr = [System.Collections.ArrayList] @()
+
+    while (($i -lt $IdxArr1.Count) -and ($j -lt $IdxArr2.Count)) {
+        $idx1 = $IdxArr1[$i]
+        $idx2 = $IdxArr2[$j]
+
+        if ( $ValArr[$idx1] -le $ValArr[$idx2] ) {
+            $null = $newArr.Add($idx1)
+            $i++
+        } else {
+            $null = $newArr.Add($idx2)
+            $j++
+        } 
+    }
+
+    while ($i -lt $IdxArr1.Count) {
+        $idx = $IdxArr1[$i]
+        $null = $newArr.Add($idx)
+        $i++
+    }
+    while ($j -lt $IdxArr2.Count) {
+        $idx = $IdxArr2[$j]
+        $null = $newArr.Add($idx)
+        $j++
+    }
+
+    return $newArr
+}
+
+function Sort-StringsAsNumbers ([Array] $Arr) {
+    $tempArr = @()
+    foreach ($item in $Arr) {
+        $tempArr += [decimal] $item 
+    }
+
+    $sortedIndices = Sort-ByIndex -Arr $tempArr
+
+    $outArr = @() 
+    foreach ($idx in $sortedIndices) {
+        $outArr += $Arr[$idx]
+    }
+
+    return $outArr 
 }
 
 function Set-Logarithmic ($Data, $OPivotKey, $Prop, $IPivotKey, $Meta) {

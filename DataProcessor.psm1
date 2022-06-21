@@ -302,7 +302,7 @@ function Add-OrderedDataStats($DataObj, $Property, $IPivotKey, $OPivotKey, $Mode
     # Fill out percentiles
     foreach ($percentile in $Percentiles) {
         $i = [Int](($percentile / 100) * ($dataModel.orderedData.Count - 1))
-        $dataModel.percentiles.$percentile = $dataModel.orderedData[$i]
+        $dataModel.percentiles["$percentile"] = $dataModel.orderedData[$i]
     }
 }
 
@@ -354,13 +354,14 @@ function Percentiles-FromHistogram ($DataObj, $Property, $IPivotKey, $OPivotKey,
         }
 
         if ($null -eq $prevBucket) {
-            $dataModel.percentiles.$percentile = $bucket
-        } else {
+            $dataModel.percentiles["$percentile"] = $bucket
+        } 
+        else {
             # Approx. the desired percentile via linear interpolation
             $interp = ($percentile - $cdf.$prevBucket) / ($cdf.$bucket - $cdf.$prevBucket)
             $approxPercentile = ($interp * $bucket) + ((1 - $interp) * $prevBucket)
 
-            $dataModel.percentiles.$percentile = $approxPercentile
+            $dataModel.percentiles["$percentile"] = $approxPercentile
         }
     }
 }

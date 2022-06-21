@@ -24,7 +24,7 @@ function Restructure-Data ($DataObj) {
         foreach ($prop in $meta.props) {
 
             $prevDepth = $depthStack.Peek()
-            if ($prop -notin $prevDepth) { 
+            if ($prop -notin $prevDepth.keys) { 
                 $prevDepth[$prop] = @{}
             }
             $null = $depthStack.Push($prevDepth[$prop])
@@ -47,8 +47,8 @@ function Restructure-Data ($DataObj) {
                 foreach ($mode in $DataObj.data.$oPivotKey.$prop.$iPivotKey.keys) {
                     $prevDepth = $depthStack.Peek()
                     if ($meta.comparison) {
-                        $prevDepth[$mode] = @{}
-                        $null = $depthStack.Push($prevDepth[$mode])
+                        $prevDepth["$mode"] = @{}
+                        $null = $depthStack.Push($prevDepth["$mode"])
                     } else {
                         $null = $depthStack.Push($prevDepth)
                     }
@@ -57,8 +57,8 @@ function Restructure-Data ($DataObj) {
                         if ($metric -in @("orderedData", "histogram")) { continue }
                         $prevDepth = $depthStack.Peek()
                         $prevDepth.$metric = @{} 
-                        foreach ($measure in $DataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.$metric.keys) {
-                            $prevDepth.$metric[[String]$measure] = [String]$DataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.$metric.$measure
+                        foreach ($measure in $DataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.$metric.keys) { 
+                            $prevDepth.$metric[$measure] = [String]$DataObj.data.$oPivotKey.$prop.$iPivotKey.$mode.$metric.$measure
                         } 
                     } 
                     $null = $depthStack.Pop()
@@ -73,20 +73,87 @@ function Restructure-Data ($DataObj) {
 
 
 
-
+    $output.meta = $meta
     return $output # ConvertNestedHashTableTo-Json($output)
 }
 
-
-function ConvertNestedHashTableTo-Json ($object) {
-    if ($object.GetType().Name -ne "Hashtable") {
-        return $object
+function Parse-RestructedData ($dataObj) {
+    $processedDataObj = @{
+        "meta" = $dataObj.meta
+        "data" = @{}
     }
 
-    $newObject = @{}
-    foreach ($key in $object.keys) {
-        $newObject["$key"] = ConvertNestedHashTableTo-Json($object[$key])
+    $meta = $dataObj.meta 
+    
+    $depthStack = [System.Collections.Stack]@() 
+
+    foreach ($oPivotKey in $meta.OuterPivotKeys) {
+        $usedOPivotLabel = ($meta.OuterPivot -ne "")
+        $oPivotLabel = "$($oPivotKey)-$($meta.OuterPivot)"
+        
+        $processedDataObj.data[$oPivotKey] = @{}
+        $null = $depthStack.push($processedDataObj.data.$oPivotKey)
+         
+        foreach ($prop in $meta.props) {
+
+            $prevDepth = $depthStack.Peek()
+            if ($prop -notin $prevDepth.keys) {
+                $prevDepth[$prop] = @{}
+            }
+            $null = $depthStack.Push($prevDepth[$prop])
+
+            foreach ($iPivotKey in $meta.InnerPivotKeys) {
+                $usedIPivotLabel = ($meta.InnerPivot -ne "") 
+                $iPivotLabel = "$($iPivotKey)-$($meta.InnerPivot)"
+                
+                $prevDepth = $depthStack.Peek() 
+                $prevDepth[$iPivotKey] = @{}
+                $null = $depthStack.Push($prevDepth[$iPivotKey]) 
+
+                
+                if ($usedOPivotLabel) {
+                    $inputObjDepth = $dataObj.$oPivotLabel.$prop
+                } 
+                else {
+                    $inputObjDepth = $dataObj.$prop 
+                }
+
+                if ($usedIPivotLabel) {
+                    $inputObjDepth = $inputObjDepth.$iPivotLabel
+                }
+                
+                $modes = @("baseline")
+                if ($meta.comparison) {
+                    $modes += "test"
+                }
+
+                foreach ($mode in $modes) { 
+
+                    $prevDepth = $depthStack.Peek()
+                    $prevDepth[$mode] = @{}
+                    $depthStack.push($prevDepth[$mode]) 
+
+                    
+                    $inputFinalDepth = $inputObjDepth
+                    if ($usedModeLabel) {
+                        $inputFinalDepth = $inputFinalDepth["$mode"]
+                    }
+
+                    foreach ($metric in $inputFinalDepth.keys) { 
+                        $prevDepth = $depthStack.Peek()
+                        $prevDepth.$metric = @{} 
+                        foreach ($measure in $inputFinalDepth.$metric.keys) {
+                            $prevDepth.$metric[[String]$measure] = [Decimal] $inputFinalDepth.$metric.$measure
+                        } 
+                    } 
+                    $null = $depthStack.Pop()
+                }
+                $null = $depthStack.Pop()
+            }
+            $null = $depthStack.Pop()
+        }
+        $null = $depthStack.Pop()
     }
 
-    return ($newObject | ConvertTo-Json)
-} 
+    return $processedDataObj
+}
