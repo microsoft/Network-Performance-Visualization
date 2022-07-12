@@ -587,6 +587,12 @@ function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPiv
     for ($i = 0; $i -lt $latencies.Count; $i++) {
         $dataEntry.latency += @($latencies[$i].latency) * $latencies[$i].frequency
     }
+    
+    $iPivotKey = if ($dataEntry[$InnerPivot]) {$dataEntry[$InnerPivot]} else {""}
+    $oPivotKey = if ($dataEntry[$OuterPivot]) {$dataEntry[$OuterPivot]} else {""}
+
+    $InnerPivotKeys[$iPivotKey] = $true
+    $OuterPivotKeys[$oPivotKey] = $true
 
     return $dataEntry
 } 
