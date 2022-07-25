@@ -284,13 +284,13 @@ function New-NetworkVisualization {
         } elseif ($tool -in @("LATTE", "LagScope")) { 
             #$tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "latency" -SubSampleRate $SubsampleRate
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool
-            $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
+            #$tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
         } elseif ($tool -in @("CPS")) {
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "conn/s" -SubSampleRate $SubsampleRate
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "close/s" -SubSampleRate $SubsampleRate
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
         }
-        #$tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
+        $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
     } 
     
     
