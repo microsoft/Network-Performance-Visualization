@@ -212,8 +212,12 @@ function Format-Stats {
 
             # Add row labels and fill data in table
             
-            if ($data.$OPivotKey.$prop.$IPivotKey.baseline.stats) {$metrics = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.Keys}
-            else {$metrics = $data.$OPivotKey.$prop.$IPivotKey.test.stats.keys}
+            if ($data.$OPivotKey.$prop.$IPivotKey.baseline.stats) {
+                $metrics = $data.$OPivotKey.$prop.$IPivotKey.baseline.stats.Keys
+            }
+            else {
+                return
+            }
 
             foreach ($metric in $Metrics) {
                 if ($table.rows.$prop.Keys -notcontains $metric) {

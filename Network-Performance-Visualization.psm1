@@ -291,7 +291,7 @@ function New-NetworkVisualization {
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
         }
         $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
-    } 
+    }
     
     
     Create-ExcelFile -Tables $tables -SavePath $fullPath 
