@@ -175,8 +175,8 @@ function Get-RawData {
                 $output.meta.units["vSwitch root VP utilization"] = "% Utilization"
             }
 
-            if ($PathCosts.meta.props -contains "CPU Utlization") { 
-                $output.meta.props += "CPU Utlization"
+            if ($PathCosts.meta.props -contains "CPU Utilization") { 
+                $output.meta.props += "CPU Utilization"
                 $output.meta.goal["CPU Utlization"] = "decrease"
                 $output.meta.format["CPU Utlization"] = "0.00"
                 $output.meta.units["CPU Utlization"] = "% Utilization"
@@ -188,7 +188,7 @@ function Get-RawData {
                 $output.meta.format["cycles/packet"] = "0.00"
             }
 
-            if ($PathCosts.meta.props -contains "cycles/byte") { 
+            if ($PathCosts.meta.props -contains "cycles/byte") {
                 $output.meta.props += "cycles/byte"
                 $output.meta.goal["cycles/byte"] = "decrease"
                 $output.meta.format["cycles/byte"] = "0.00"
@@ -248,10 +248,10 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
 
             # TPUT measures from dedicated tools are more reliable than vswitch counters 
             # (which sometimes return 0 erroneously), thus we perform the cycles/byte calculation
-            # using our own TPUT measures when possible
+            # using TPUT measures from ntttcp/ctstraffic when possible
             if ($PathCosts[$file].ContainsKey("Total CPU cycles used per second")) {
                 $avgTput = ((1000 * 1000 * 1000) / 8) * ($entry["throughput"] | Measure-Object -Average).Average
-                if ($avgTput -ne 0) { 
+                if ($avgTput -ne 0) {
                     $cpb = $PathCosts[$file]["Total CPU cycles used per second"] / $avgTput
                 }
 
@@ -266,8 +266,8 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
             # make visualizations unusable, thus we filter outliers here. We 
             # should look for a more sustainable solution in the future
             
-            if ($cpb -lt 100) {
-                $entry["cycles/byte"] = $cpb 
+            if ($cpb -lt 100 -and $cpb -gt 0) {
+                $entry["cycles/byte"] = $cpb
             } 
 
             if ($vsrvp -and $vsrvp -le 100) { 
@@ -282,9 +282,15 @@ function Incorporate-PathCosts ($Data, $PathCosts) {
                 $entry["RSS Core Utilization"] = $rcu 
             }
 
-            $entry["cycles/packet"] = $cpp
-            $entry["CPU Utilization"] = $cpu
-            $entry["total root VP utilization"] = $trvp
+            if ($cpp -gt 0) {
+                $entry["cycles/packet"] = $cpp
+            }
+            if ($cpu -gt 0) {
+                $entry["CPU Utilization"] = $cpu
+            }
+            if ($trvp -gt 0) {
+                $entry["total root VP utilization"] = $trvp
+            }
             
         }
     }
@@ -366,17 +372,20 @@ function Extract-PathCosts ($Filename, $PathCosts) {
         $obj.psobject.properties | Foreach {
             try {
                 $propName = $_.Name
-                if ($propName -Match ".*(\(.*\)).*") {
+                if ($propName -Match ".*\((.*)\).*") {
                     $propName = $Matches[1]
                 }
-                if ($propName -notin $PathCosts.meta.props) {
-                    $PathCosts.meta.props += $propName
+                $value = [Decimal]$_.Value
+                if ($value -gt 0) {
+                    if ($propName -notin $PathCosts.meta.props) {
+                        $PathCosts.meta.props += $propName
+                    }
+                    $values[$propName] = $value
                 }
-                $values[$propName] = [Decimal]$_.Value 
+                 
             } catch {}
         }
         $PathCosts[$key] = $values
-        
     }
 }
  
