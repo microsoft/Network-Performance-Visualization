@@ -2,6 +2,7 @@ $NTTTCPPivots = @("sessions", "bufferLen", "bufferCount", "none")
 $LATTEPivots = @("protocol", "sendMethod", "none")
 $CTSPivots = @("sessions", "none")
 $CPSPivots = @("none")
+$NCPSPivots = @("none")
 $LagScopePivots = @("none")
 
 $DEFAULT_SAVEPATH = ".\visualization.xlsx"
@@ -30,7 +31,10 @@ $DEFAULT_JSONPATH = ".\stats.xlsx"
     } 
     elseif ($FakeBoundParameters.ContainsKey("CPS")) {
         return $CPSPivots | where {$_ -like "$WordsToComplete*"}
-    } 
+    }
+    elseif ($FakeBoundParameters.ContainsKey("NCPS")) {
+        return $NCPSPivots | where {$_ -like "$WordsToComplete*"}
+    }
     else {
         return @("")
     }
@@ -77,6 +81,7 @@ function processing_end {
         LATTE
         CTStraffic
         CPS
+        NCPS
         Lagscope
 
     This tool can aggregate data over several iterations of test runs, and can be used to visualize comparisons
@@ -105,6 +110,7 @@ function processing_end {
         CTSTraffic: sessions, none
         LagScope:   protocol, none
         CPS:        none
+        NCPS:       none
     
     The default for all cases is none.
 
@@ -139,6 +145,9 @@ function New-NetworkVisualization {
 
         [Parameter(Mandatory=$true, ParameterSetName="CPS")]
         [Switch] $CPS,
+
+        [Parameter(Mandatory=$true, ParameterSetName="NCPS")]
+        [Switch] $NCPS,
 
         [Parameter(Mandatory=$true, ParameterSetName="LagScope")]
         [Switch] $LagScope,
@@ -186,6 +195,7 @@ function New-NetworkVisualization {
 
         [Parameter(Mandatory=$false, ParameterSetName = "LATTE")]
         [Parameter(Mandatory=$false, ParameterSetName = "CPS")]
+        [Parameter(Mandatory=$false, ParameterSetName = "NCPS")]
         [Parameter(Mandatory=$false, ParameterSetName = "LagScope")]
         [Int] $SubsampleRate = -1, 
         
@@ -289,6 +299,10 @@ function New-NetworkVisualization {
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "conn/s" -SubSampleRate $SubsampleRate
             $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "close/s" -SubSampleRate $SubsampleRate
             $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
+        } elseif ($tool -in @("NCPS")) {
+            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "conn/s" -SubSampleRate $SubsampleRate
+            $tables += Format-Distribution -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool -Prop "close/s" -SubSampleRate $SubsampleRate
+            $tables += Format-Histogram    -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool  
         }
         $tables  += Format-Percentiles -DataObj $processedData -OPivotKey $oPivotKey -Tool $tool 
     }
@@ -355,6 +369,10 @@ function Confirm-Pivots ($Tool, $InnerPivot, $OuterPivot) {
             break
         }
         "CPS" {
+            $CPSPivots
+            break
+        }
+        "NCPS" {
             $CPSPivots
             break
         }

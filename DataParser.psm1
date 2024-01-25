@@ -135,6 +135,29 @@ function Get-RawData {
                 "noTable" = [Array]@("filename")
             }
         }
+        "NCPS" {
+            $parseFunc = ${Function:Parse-NCPS}
+
+            $output."meta" = @{
+                "props" = [Array] @(
+                    "conn/s",
+                    "close/s"
+                )
+                "units" = @{
+                    "conn/s" = ""
+                    "close/s" = ""  
+                }
+                "goal" = @{
+                    "conn/s" = "increase"
+                    "close/s" = "increase"    
+                }
+                "format" = @{ 
+                    "conn/s" = "0.0"
+                    "close/s" = "0.0"
+                }
+                "noTable" = [Array]@("filename")
+            }
+        }
     } 
 
     $PathCosts = @{
@@ -624,6 +647,57 @@ function Parse-LagScope ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPiv
     Name of outer pivot property
 #>
 function Parse-CPS ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts, $Warmup, $Cooldown) {
+    if ($Filename -match "pathcost") {
+        Extract-PathCost -Filename $Filename -PathCosts $PathCosts 
+        return
+    }
+
+    $file = Get-Content $FileName
+
+    $dataEntry = @{
+        "filename" = $FileName
+        "conn/s" = [Array] @()
+        "close/s" = [Array] @()
+    }
+
+    foreach ($line in $file[1..($file.Count - 1)]) {
+        $splitLine = Remove-EmptyStrings -Arr $line.split(' ')
+         
+        if ($splitLine.Count -eq 0) {
+            break
+        }
+
+        $dataEntry."conn/s" += ,[Decimal]($splitLine[5])
+        $dataEntry."close/s" += ,[Decimal]($splitLine[6]) 
+    } 
+
+    $iPivotKey = if ($dataEntry[$InnerPivot]) {$dataEntry[$InnerPivot]} else {""}
+    $oPivotKey = if ($dataEntry[$OuterPivot]) {$dataEntry[$OuterPivot]} else {""}
+
+    $InnerPivotKeys[$iPivotKey] = $true
+    $OuterPivotKeys[$oPivotKey] = $true
+    
+    return $dataEntry
+}
+
+
+<#
+.SYNOPSIS 
+    This function parses a single file containing NCPS data. Each line contains
+    conn/s and close/s samples which are extracted into arrays, packaged into a 
+    HashTable, and returned. 
+.PARAMETER Filename
+    Path of the status log file to parse.
+.PARAMETER InnerPivotKeys
+    Set containing all inner pivot keys encountered across all data files
+.PARAMETER OuterPivotKeys
+    Set containing all outer pivot keys encountered across all data files
+.PARAMETER InnerPivot
+    Name of inner pivot property
+.PARAMETER OuterPivot
+    Name of outer pivot property
+#>
+function Parse-NCPS ([string] $FileName, $InnerPivot, $OuterPivot, $InnerPivotKeys, $OuterPivotKeys, $PathCosts, $Warmup, $Cooldown) {
     if ($Filename -match "pathcost") {
         Extract-PathCost -Filename $Filename -PathCosts $PathCosts 
         return
